@@ -402,9 +402,6 @@ rm(rename)
 db_m <- db %>% select(
   Sensationalism,
   TotalError.01, 
-  Taxonomic_error,
-  Venom_error,
-  Anatomy_error,
   Type_of_newspaper, 
   Continent,
   Circulation,
@@ -433,18 +430,21 @@ table(db_m$TotalError.01)  #ok
 Amelia::missmap(db_m)
 db_m <- na.omit(db_m) #Omitting missing data
 
+# Final sample size
+nrow(db_m)
+
 # Fitting the model: Sensationalism ---------------------------------------
 
-m1 <- lme4::glmer(Sensationalism ~ Type_of_newspaper + Circulation + TypeEvent + Figure_species + Figure_bite +
+m1 <- lme4::glmer(Sensationalism ~ yr + Type_of_newspaper + Circulation + TypeEvent + Figure_species + Figure_bite +
                     TotalError.01 + Expert_doctor + Expert_arachnologist + Expert_others +
-                    (1|ID) + (1|ID_Event) + (1|Genus) + (1|Lenguage2) + (1|Country_search2), 
+                    (1|ID_Event) + (1|Genus) + (1|Lenguage2) + (1|Country_search2), 
                   data = db_m, 
-                  family = "binomial",
+                  family = binomial(link = "logit"),
                   control = glmerControl(optimizer="bobyqa") 
                   )
 
 # Check model
-performance::check_model(m1, check = c("vif", "outliers", "reqq"))
+performance::check_model(m1, check = c("vif", "reqq"))
 
 # Model residuals vs temporal and spatial factors
 R_m1 <- residuals(m1)
@@ -468,16 +468,16 @@ sjPlot::plot_model(m1, title ="Factors explaining the probability a news story b
 
 # Fitting the model: Errors ---------------------------------------
 
-m2 <- lme4::glmer(TotalError.01 ~ Type_of_newspaper + Circulation + TypeEvent +
+m2 <- lme4::glmer(TotalError.01 ~ yr + Type_of_newspaper + Circulation + TypeEvent +
                       Sensationalism + Expert_doctor + Expert_arachnologist + Expert_others +
-                    (1|ID) + (1|ID_Event) + (1|Genus) + (1|Lenguage2) + (1|Country_search2), 
+                    (1|ID_Event) + (1|Genus) + (1|Lenguage2) + (1|Country_search2), 
                   data = db_m, 
-                  family = "binomial",
+                  family = binomial(link = "logit"),
                   control = glmerControl(optimizer="bobyqa") 
 )
 
 # Check model
-performance::check_model(m2, check = c("vif", "outliers", "reqq"))
+performance::check_model(m2, check = c("vif", "reqq"))
 
 # Model residuals vs temporal and spatial factors
 R_m2 <- residuals(m2)
@@ -870,6 +870,15 @@ EstimateDF2 %>% ggplot2::ggplot(aes(Variable, Estimate)) +
   geom_hline(lty = 1, col = "grey60", yintercept = 0) +
   geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2) +
   geom_point() + theme_custom() + coord_flip()
+
+
+#########################################
+
+
+
+
+
+
 
 
 
