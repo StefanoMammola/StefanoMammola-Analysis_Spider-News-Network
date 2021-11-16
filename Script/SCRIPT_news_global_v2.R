@@ -28,7 +28,8 @@ library("dplyr")
 library("geosphere")     
 library("GGally")        
 library("ggalt")         
-library("ggplot2")       
+library("ggplot2")
+library("ggraph")
 library("ggthemes")      
 library("gridExtra")     
 library("igraph")        
@@ -86,8 +87,6 @@ extractID_attributes <- function(id){
   ) #get news distance
   
   Distance_information <- ifelse(is.na(Distance_news), NA, mean(as.matrix(Distance_news)[,1]))
-  
-  # lm?
   
   return( data.frame(ID, n, year, Temporal_span, lon, lat,
                      Country_event, Genus, Bite, Death,
@@ -239,6 +238,21 @@ db_unique_event <- distinct(db, ID_Event, .keep_all = TRUE)
 #Database only with distinct news
 db_unique_news  <- distinct(db, ID, .keep_all = TRUE) 
 
+# Loading country attribute database ------------------------------------------
+
+# country_attr <- read.csv(file = "Data/Country_attributes/CountryAttributes.csv", sep = '\t', dec = ',', header = TRUE, as.is = FALSE)
+# cat <- read.csv(file = "Data/Country_attributes/Catherine_SPIDER_data.csv", sep = '\t', dec = ',', header = TRUE, as.is = FALSE)
+# jag <- read.csv(file = "Data/Country_attributes/Jagoba_Country_Data.csv", sep = '\t', dec = ',', header = TRUE, as.is = FALSE)
+# 
+# country_attr <- country_attr %>% left_join(jag, by = "Country")
+# country_attr <- country_attr %>% left_join(cat, by = "Country")
+# 
+# write_csv(country_attr, "Data/CountryAttributes_new.csv")
+# 
+# library("xlsx")
+# 
+# write.xlsx(country_attr, "Data/CountryAttributes_new.xlsx", row.names = FALSE)
+
 ###############################################################
 
 ## Summary statistics:
@@ -313,6 +327,97 @@ ggplot(data = ID_attr, aes(x= Distance_information, y= Temporal_span)) + geom_po
 rm(i) #clean
 
 #########################
+# General plot ##
+#########################
+
+# Countries with no news --------------------------------------------------
+
+Botwsana   <- c(23.90,  -21.60)
+Iceland    <- c(-19.22,  64.82)
+
+NoNews <- rbind(Botwsana,
+                Iceland) %>% 
+  as.data.frame()
+
+colnames(NoNews) <- c("long","lat")
+
+# Making the map ----------------------------------------------------------
+
+world <- map_data("world")
+
+pie_1 <- data.frame(table(db$Country_search,db$TypeEvent))
+
+radius <- data.frame(log(table(db$Country_search)+1)) ; rownames(radius) <- NULL
+n <- data.frame(table(db$Country_search)) ; rownames(radius) <- NULL
+
+pie <- data.frame(Country = levels(pie_1$Var1),
+                  n =  n$Freq,
+                  Encounter   = pie_1$Freq[1:nlevels(pie_1$Var1)],
+                  Bite        = pie_1$Freq[c(nlevels(pie_1$Var1)+1):(2*c(nlevels(pie_1$Var1)))],
+                  Deadly_bite = pie_1$Freq[(2*(c(nlevels(pie_1$Var1)))+1):c(nrow(pie_1))],
+                  radius      = (radius$Freq)*0.8)
+
+pie <- unique(dplyr::left_join(x  = pie, 
+                               y  = data.frame(Country = db$Country_search, lon = db$lon3, lat = db$lat3), 
+                               by = "Country", copy = FALSE)) 
+
+(map1 <- ggplot() +
+   geom_map(map = world, data = world,
+            aes(long, lat, map_id = region),
+            color = "grey70", fill = "grey90", size = 0.3) +
+
+   ylim(-56.8,90)+ xlim(-180,195)+
+   
+   geom_curve(aes(x = jitter(lon3,0.0001), 
+                  y = jitter(lat3,0.0001), 
+                  xend = jitter(lon, 0.0001), 
+                  yend = jitter(lat, 0.0001)),
+              data = db, curvature = 0.24,lwd=0.6,
+              alpha = 0.1,  color = "grey10") +
+    
+  geom_point(data = db, 
+               aes(x = lon, y = lat), size = 0.5,
+               alpha = 0.7, color="grey10",
+               stroke = 0.8)+
+   
+   # geom_point(data = Country, 
+   #            aes(x = lon, y = lat, size = N_news),
+   #            alpha = 0.9, colour = "black",fill="blue",
+   #            shape = 21,stroke = 0.8)+
+    theme_map()+
+   # theme(legend.position = "bottom",
+   #       legend.text = element_text(size = 12),
+   #       legend.title = element_text(size = 12),
+   theme(
+     axis.line=element_blank(),axis.text.x=element_blank(),
+     axis.text.y=element_blank(),axis.ticks=element_blank(),
+     axis.title.x=element_blank(),
+     axis.title.y=element_blank(),legend.position="none",
+     panel.background=element_rect(fill = "white", colour = "white"),
+     panel.border=element_blank(),panel.grid.major=element_blank(),
+     panel.grid.minor=element_blank(),
+     plot.background= element_rect(fill = "white", colour = "white"))
+ 
+)
+
+library("scatterpie")
+
+color_maps    <- c("turquoise3", "orangered", "grey10")
+
+(map2 <- map1 + scatterpie::geom_scatterpie(data = pie, aes(x=lon, y= lat, group = Country, r = radius),
+                                 cols = c("Encounter","Bite","Deadly_bite"), alpha=.8) + 
+  theme(legend.position = "top",legend.text = element_text(size = 8))+ 
+  geom_scatterpie_legend(pie$radius, 
+                         x= -150, 
+                         y= -35, n = 3, 
+                         labeller = function (x) x=c(min(pie$n),round(mean(pie$n),0),max(pie$n)))+
+  scale_fill_manual("",labels = c("Encounter","Bite","Deadly bite"), values = color_maps))
+
+
+
+#########
+
+#########################
 # At the Country level ##
 #########################
 
@@ -340,7 +445,7 @@ country_attr <- db %>% dplyr::select(Country_search,
 country_attr$Lenguage <- ifelse(country_attr$Lenguage %in% names(which(table(country_attr$Lenguage)>9)), country_attr$Lenguage , "Others")
 
 # Add Countries with no News
-country_0 <- data.frame(Country_search = c("Botwsana", "Iceland"),
+country_0 <- data.frame(Country_search = c("Botswana", "Iceland"),
                         N = c(0,0),
                         Sensationalism = c(0,0),
                         TotalError = c(0,0),
@@ -398,8 +503,9 @@ rm(rename)
 
 # Data exploration --------------------------------------------------------
 
+
 # Creating a database for models
-db_m <- db %>% select(
+db_m <- db %>% dplyr::select(
   Sensationalism,
   TotalError.01, 
   Type_of_newspaper, 
@@ -880,9 +986,6 @@ EstimateDF2 %>% ggplot2::ggplot(aes(Variable, Estimate)) +
 
 
 
-
-
-
 # Country search ----------------------------------------------------------
 
 # Countries of the Search
@@ -1046,7 +1149,6 @@ for (i in 1:nlevels(db$Country_search)) {
 all_pairs <- na.omit(all_pairs)
 
 # Countries with no news --------------------------------------------------
-
 
 Botwsana   <- c(23.90,  -21.60)
 Iceland    <- c(-19.22,  64.82)
