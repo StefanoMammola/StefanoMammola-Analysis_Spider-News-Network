@@ -41,10 +41,33 @@ axis_labels_sjPlot_m2 = c("Year of publication",
                           "Expert [Arachnologist]",
                           "Expert [Others]")
 
-title_sjPlot_m1 = "Drivers of sensationalism of news stories"
-title_sjPlot_m2 = "Drivers of presence of errors in news stories"
+axis_labels_sjPlot_m3 = c("Number of articles",
+                          "Sensationalism",
+                          "Errors",
+                          "Internet users",
+                          "Number of spiders",
+                          "Lenguage [Arabic]",
+                          "Lenguage [English]",
+                          "Lenguage [Spanish]")
 
-xlab_sjPlot_m1_m2 = expression(paste("Odds ratios" %+-% "Standard Error"))
+axis_labels_ergm1 <- c("Edges", 
+                       "nodeMatch [Language]", 
+                       "Language [English]",
+                       "Language [Others]",
+                       "Language [Russian]",
+                       "Lenguage [Spanish]",
+                       "Sensationalism",
+                       "Errors",
+                       "Number of News Articles")
+
+title_sjPlot_m1    = "Drivers of sensationalism of news stories"
+title_sjPlot_m2    = "Drivers of presence of errors in news stories"
+title_sjPlot_m3    = "Drivers of country centrality in the network"
+title_ergm1        = "Drivers of country importance in the network"
+
+xlab_sjPlot_m1_m2 = expression(paste("Odds ratio" %+-% "Standard Error"))
+xlab_sjPlot_m3    = expression(paste("Incidence odds ratio" %+-% "Standard Error"))
+xlab_ergm1_ergm2  = expression(paste("Estimated coefficient" %+-% "Standard Error"))
 
 ###########
 # Themes ##

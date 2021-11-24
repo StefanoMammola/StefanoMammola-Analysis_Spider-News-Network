@@ -33,6 +33,7 @@ library("gridExtra")
 library("ggregplot")
 library("igraph")        
 library("lme4")
+library("MASS")
 library("magrittr")
 library("maps")          
 library("network")       
@@ -227,8 +228,8 @@ ID_attr %<>% mutate_all(function(x) ifelse(is.infinite(x), NA, x)) #convert infi
 # All genus with less than 50 occurrence become "Others":
 ID_attr$Genus <- ifelse(ID_attr$Genus %in% names(which(table(ID_attr$Genus)>50)), ID_attr$Genus, "Others")
 
-# check
-ggplot(data = ID_attr, aes(x = Distance_information, y = Temporal_span)) + geom_point() + theme_custom()
+#Replace missing data
+ID_attr$Temporal_span <- ifelse(is.na(ID_attr$Temporal_span) == TRUE, 1, ID_attr$Temporal_span)
 
 rm(i) #clean
 
@@ -401,7 +402,7 @@ performance::r2(m1)
                                    vline.color = "grey80",
                                    color = "grey5",
                                    axis.title = xlab_sjPlot_m1_m2, #"Odds ratios ",
-                                   axis.labels = rev(axis_labels_sjPlot), #rev cause it traspose x and y axes
+                                   axis.labels = rev(axis_labels_sjPlot_m1), #rev cause it traspose x and y axes
                                    show.values = TRUE, 
                                    value.offset = .3, 
                                    se = TRUE, 
@@ -440,7 +441,7 @@ performance::r2(m2)
                                    vline.color = "grey80",
                                    color = "grey5",
                                    axis.title = xlab_sjPlot_m1_m2, 
-                                   axis.labels = rev(axis_labels_sjPlot), 
+                                   axis.labels = rev(axis_labels_sjPlot_m2), 
                                    show.values = TRUE, 
                                    value.offset = .3, 
                                    se = TRUE, 
@@ -491,6 +492,7 @@ node_trait
 
 # Combine them with the Country attributes
 country_attr <- country_attr %>% dplyr::left_join(node_trait, by = c("Country_search" = "ID"))
+country_attr[80:81,15:19] <- 0 #give values of zero for Network properties for Iceland and Botswana
 
 # Attach them to the Graph_tbl_uni
 Graph_unipartite <- Graph_unipartite %>% tidygraph::activate(nodes) %>% 
@@ -534,24 +536,67 @@ Graph_unipartite %>% igraph::simplify(edge.attr.comb = "sum") %>% ggraph::ggraph
   scale_fill_manual(values = c("blue", "orange", "turquoise","purple", "grey15"))+
   geom_node_text(aes(label = name), size=2, color="gray10", repel=TRUE) +
   theme_void() + theme(legend.position = "bottom",legend.direction = "vertical")+ coord_fixed()
-# 
-# 
 
-m3 <- lme4::glmer.nb(Degree.x ~
-                       scale(Sensationalism) +
-                       scale(ISA) +
-                       scale(Internet_users) +
-                       scale(N_newspapers) +
-                       scale(N_Spiders) +
-                       (1|Lenguage) ,
-                  #family = "poisson",
-                  data = country_attr,
-                  control = glmerControl(optimizer="bobyqa")
-)
+###################################
+# Regression Models #
+###################################
 
-summary(m1)
-performance::check_model(m1)
-sjPlot::plot_model(m1)
+db_m3_cat <- country_attr %>% dplyr::select(Degree, Country_search, Lenguage) 
+db_m3_con <- country_attr %>% dplyr::select(N, ISA, Sensationalism, TotalError, Education_index,
+                                            Internet_users, N_Spiders, N_Deadly_Spiders,
+                                            N_newspapers
+                                            ) %>% apply(MARGIN = 2, scale) #scale all var
+
+db_m3 <- data.frame(db_m3_cat, db_m3_con) ; rm(db_m3_cat, db_m3_con)
+
+#Check collinearity
+psych::pairs.panels( db_m3 %>% dplyr::select(N, ISA, Sensationalism, TotalError, Education_index,
+                                Internet_users, N_Spiders, N_Deadly_Spiders,
+                                N_newspapers)) 
+#Education index and internewt users 
+#Number of newspaper and ISA
+#ISA and N
+#Spider and Deadly spiders
+
+db_m3 <- db_m3 %>% dplyr::select(-c(ISA,N_newspapers,Education_index,N_Deadly_Spiders))
+
+# Remove missing values
+db_m3_noNA <- na.omit(db_m3)
+
+# Set reference level
+db_m3_noNA$Lenguage <- as.factor(db_m3_noNA$Lenguage)
+
+# Set formula
+formula_m3 <- as.formula("Degree ~ N + Sensationalism + TotalError + Internet_users + N_Spiders + Lenguage")
+
+# Fit the model
+m3 <- glm(formula_m3, family = "poisson", data = db_m3_noNA)
+
+# Check model
+performance::check_overdispersion(m3) #Overdispersed
+
+# Switch to negative binomial
+m3 <- MASS::glm.nb(formula_m3, data = db_m3_noNA)
+
+# Check model
+performance::check_model(m3)
+
+# Interpret the model
+parameters::model_parameters(m3)
+performance::r2(m3)
+
+# Plot
+(plot_model3 <- sjPlot::plot_model(m3, 
+                                   title = title_sjPlot_m3,
+                                   sort.est = FALSE,  
+                                   vline.color = "grey80",
+                                   color = "grey5",
+                                   axis.title = xlab_sjPlot_m3, 
+                                   axis.labels = rev(axis_labels_sjPlot_m3), 
+                                   show.values = TRUE, 
+                                   value.offset = .3, 
+                                   se = TRUE, 
+                                   show.p = FALSE) + theme_custom())
 
 ###################################
 # Exponential Random Graph Models #
@@ -562,7 +607,7 @@ AdjMatrix <- Graph_unipartite %>% get.adjacency(attr = "weight", sparse = FALSE)
 
 AdjMatrix[AdjMatrix>0] <- 1  
 
-dim(AdjMatrix) #check it's a square
+dim(AdjMatrix) #check if it's a square
 
 #Assign row and col names
 colnames(AdjMatrix) <- rownames(AdjMatrix) <- Graph_unipartite %>% activate(nodes) %>% pull(name)
@@ -573,40 +618,34 @@ ResponseNetwork <- AdjMatrix %>% as.matrix %>% network::network(directed = FALSE
 #Adding node-level attributes
 Graph_unipartite %>% as.data.frame %>% colnames
 
-ResponseNetwork %v% "N" <- Graph_tbl_uni %>% as.data.frame %>% pull(N)
-
-ResponseNetwork %v% "Lenguage" <- Graph_tbl_uni %>% as.data.frame %>% pull(Lenguage) # should be as.character
-
-ResponseNetwork %v% "Sensationalism" <- Graph_tbl_uni %>% as.data.frame %>% pull(Sensationalism)
-
-ResponseNetwork %v% "TotalError" <- Graph_tbl_uni %>% as.data.frame %>% pull(TotalError)
-
-ResponseNetwork %v% "ISA" <- Graph_tbl_uni %>% as.data.frame %>% pull(ISA)
-
-Spatial <- SpatialLayout %>% dist %>% as.matrix
+ResponseNetwork %v% "N"              <- Graph_unipartite %>% as.data.frame %>% pull(N)
+ResponseNetwork %v% "Lenguage"       <- Graph_unipartite %>% as.data.frame %>% pull(Lenguage) # should be as.character
+ResponseNetwork %v% "Sensationalism" <- Graph_unipartite %>% as.data.frame %>% pull(Sensationalism)
+ResponseNetwork %v% "TotalError"     <- Graph_unipartite %>% as.data.frame %>% pull(TotalError)
+ResponseNetwork %v% "ISA"            <- Graph_unipartite %>% as.data.frame %>% pull(ISA)
 
 #Data exploration
 
 # Collinearity 
-psych::pairs.panels(Graph_tbl_uni %>% as.data.frame %>% select(ISA, N, Sensationalism, TotalError))
+psych::pairs.panels(Graph_unipartite %>% as.data.frame %>% select(ISA, N, Sensationalism, TotalError))
 
 # Isa and N are likely collinear:
-Graph_tbl_uni %>% as.data.frame %>% ggplot(aes(x=log(ISA+1),y=log(N+1))) + geom_point() + theme_custom()
+Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=log(ISA+1),y=log(N+1))) + geom_point() + theme_custom()
 
 # Check association between Lenguage and continous var
-Graph_tbl_uni %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=lon)) + geom_boxplot() + theme_custom()
-Graph_tbl_uni %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=lat)) + geom_boxplot() + theme_custom()
-Graph_tbl_uni %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=Sensationalism)) + geom_boxplot() + theme_custom()
-Graph_tbl_uni %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=TotalError)) + geom_boxplot() + theme_custom()
-Graph_tbl_uni %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=N)) + geom_boxplot() + theme_custom()
-Graph_tbl_uni %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=ISA)) + geom_boxplot() + theme_custom()
+Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=lon)) + geom_boxplot() + theme_custom()
+Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=lat)) + geom_boxplot() + theme_custom()
+Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=Sensationalism)) + geom_boxplot() + theme_custom()
+Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=TotalError)) + geom_boxplot() + theme_custom()
+Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=N)) + geom_boxplot() + theme_custom()
+Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=ISA)) + geom_boxplot() + theme_custom()
 
 # Model fit
 ergm0 <- ergm::ergm(ResponseNetwork ~ edges, estimate = "MLE")
-ergm1 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(Spatial), estimate = "MLE")
-ergm2 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(Spatial) + nodecov("Sensationalism"), estimate = "MLE")
-ergm3 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(Spatial) + nodecov("Sensationalism") + nodecov("TotalError"), estimate = "MLE")
-ergm4 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(Spatial) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N"), estimate = "MLE")
+ergm1 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout), estimate = "MLE")
+ergm2 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism"), estimate = "MLE")
+ergm3 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError"), estimate = "MLE")
+ergm4 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N"), estimate = "MLE")
 ergm5 <- ergm::ergm(ResponseNetwork ~ edges + nodefactor("Lenguage") + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N"), estimate = "MLE")
 ergm6 <- ergm::ergm(ResponseNetwork ~ edges + nodematch("Lenguage", diff = F) + nodefactor("Lenguage") + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N"), estimate = "MLE")
 
@@ -634,7 +673,6 @@ qplot(1:NSims, Sims %>% map_dbl(~.x %>% as.matrix %>% c %>% Prev)) + ylab("preva
 rm(BlankNetwork, NSims)#clean
 
 # Interpret the model
-summary(ergm_BIC)
 
 EstimateDF <- 
   ergm_BIC %>% summary %>% extract2("coefficients") %>% 
@@ -652,11 +690,14 @@ EstimateDF %<>% # Bind them together
 
 EstimateDF %>% head
 
-EstimateDF %>% ggplot2::ggplot(aes(Variable, Estimate)) +
-  geom_hline(lty = 1, col = "grey60", yintercept = 0) +
-  geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2) +
-  geom_point() + theme_custom() + coord_flip()
+EstimateDF$Variable <- axis_labels_ergm1
 
+(plot_ergm1 <- EstimateDF %>% ggplot2::ggplot(aes(Variable, Estimate)) +
+  geom_hline(lty = 1, col = "grey60", yintercept = 0) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0) +
+  labs(y     = xlab_ergm1_ergm2, 
+       title = title_ergm1) +
+      geom_point() + theme_custom() + theme(axis.title.y=element_blank()) + coord_flip())
 
 # Analysing ID_Event-level network properties -----------------------------
 
@@ -677,49 +718,52 @@ NetworkTraitGet(Graph_unipartite2)
 # Size Diameter MeanDegree DegreeVariance Components Transitivity   Density LouvainModularity
 # 2644       16   271.1135       250.9714         10    0.7854129 0.1025391         0.5366639
 
-# Get the adjacency matrix
-Graph_adj_matrix2 <- Graph_unipartite2 %>% get.adjacency(sparse = FALSE)
-
 # Calculating node level traits (warning: takes about 1 minute)
 node_trait2 <- Graph_unipartite2 %>% 
   NodeTraitGet(mode = "in", dir = FALSE) %>% bind_cols()
 
-node_trait2 %>% head
-
-# Combine them with the Country
+# Combine them with the ID_attr
 ID_attr <- ID_attr %>% left_join(node_trait2, by = c("ID" = "ID"))
 
 # Attach them to the Graph_tbl_uni
 Graph_unipartite2 <- Graph_unipartite2 %>% tidygraph::activate(nodes) %>% left_join(ID_attr, by = c("name" = "ID"))
 
-# Check some patterns
-db2 <- Graph_unipartite2 %>% activate(nodes) %>% as.data.frame
+###################################
+# Regression Models #
+###################################
+db_m3_cat <- ID_attr %>% dplyr::select(Degree, Country_event, Genus) 
+db_m3_con <- ID_attr %>% dplyr::select(n, Temporal_span, Sensationalism, Distance_information, Bite, Death) %>% apply(MARGIN = 2, scale)
 
-db2 %>% ggplot(aes(x = year, y = Degree)) + geom_point() + theme_custom()
-db2 %>% ggplot(aes(x = Distance_information, y = Degree)) + geom_point() + theme_custom()
-db2 %>% ggplot(aes(x = Sensationalism, y = Degree)) + geom_point() + theme_custom()
-db2 %>% ggplot(aes(x = Genus, y = Degree)) + geom_boxplot() + theme_custom()
-db2 %>% ggplot(aes(x = Temporal_span, y = Degree)) + geom_point() + theme_custom()
-db2 %>% ggplot(aes(x = Death, y = Degree)) + geom_point() + theme_custom()
-db2 %>% ggplot(aes(x = Bite, y = Temporal_span)) + geom_point() + theme_custom()
+db_m3 <- data.frame(db_m3_cat, db_m3_con) ; rm(db_m3_cat, db_m3_con)
 
-db3 <- db2[!is.na(db2$year),]
-db3 <- db3[!is.na(db3$Temporal_span),]
-m1 <- glm(Temporal_span ~ year, data = db3, family = "poisson") 
+m4 <- lme4::glmer(Degree ~ n + Bite + Death + Temporal_span + Sensationalism +
+                        Genus + (1|Country_event),
+                  family = "poisson",
+                  data = db_m3,
+                  control = glmerControl(optimizer="bobyqa")
+)
 
-E1 <- residuals(m1)
-db3 <- data.frame(db3,E1)
+performance::check_overdispersion(m4)
 
-db3 %>% ggplot(aes(x = Bite, y = E1)) + geom_point() + geom_smooth(method = "lm", formula = y ~ x, se = T, col="purple") + theme_custom()
-db3 %>% ggplot(aes(x = Sensationalism, y = E1)) + geom_point() + geom_smooth(method = "lm", formula = y ~ x, se = T, col="purple") + theme_custom()
-db3 %>% ggplot(aes(x = Distance_information, y = E1)) + geom_point() + theme_custom()
-db3 %>% ggplot(aes(x = Degree, y = E1)) + geom_point() + geom_smooth(method = "lm", formula = y ~ x, se = T, col="purple") + theme_custom()
-db3 %>% ggplot(aes(x = Genus, y = E1)) + geom_boxplot() + theme_custom()
+m4 <- lme4::glmer.nb(Degree ~ n + Bite + Death + Temporal_span + Sensationalism + Genus + (1|Country_event),
+                  data = db_m3,
+                  control = glmerControl(optimizer="bobyqa")
+)
 
+summary(m4)
 
-m1 <- lm(E1 ~ Bite + Death + Sensationalism, data = db3) 
-
-summary(m1)
+sjPlot::plot_model(m4, 
+                   #title = title_sjPlot_m2,
+                   sort.est = FALSE,  
+                   vline.color = "grey80",
+                   color = "grey5",
+                   #axis.title = xlab_sjPlot_m1_m2, 
+                   #axis.labels = rev(axis_labels_sjPlot), 
+                   show.values = TRUE, 
+                   value.offset = .3, 
+                   se = TRUE, 
+                   show.p = TRUE) + theme_custom()
+)
 
 
 ###################################
@@ -727,50 +771,47 @@ summary(m1)
 ###################################
 
 #Convert the Adjacency matrix to incidence
-AdjMatrix2 <- Graph_adj_matrix2
+AdjMatrix2 <- Graph_unipartite2 %>% get.adjacency(sparse = FALSE)
 
 AdjMatrix2[AdjMatrix2>0] <- 1  
 
 dim(AdjMatrix2) #check it's a square
 
 #Assign row and col names
-colnames(AdjMatrix2) <- rownames(AdjMatrix2) <- Graph_tbl_uni2 %>% activate(nodes) %>% pull(name)
+colnames(AdjMatrix2) <- rownames(AdjMatrix2) <- Graph_unipartite2 %>% activate(nodes) %>% pull(name)
 
 #Response variables
 ResponseNetwork2 <- AdjMatrix2 %>% as.matrix %>% network::network(directed = FALSE)
 
 #Adding node-level attributes
-Graph_tbl_uni2 %>% as.data.frame %>% colnames
+Graph_unipartite2 %>% as.data.frame %>% colnames
 
-ResponseNetwork2 %v% "year" <- Graph_tbl_uni2 %>% as.data.frame %>% pull(year)
-
-ResponseNetwork2 %v% "Bite" <- Graph_tbl_uni2 %>% as.data.frame %>% pull(Bite) # should be as.character
-
-ResponseNetwork2 %v% "Death" <- Graph_tbl_uni2 %>% as.data.frame %>% pull(Death)
-
-ResponseNetwork2 %v% "Genus" <- Graph_tbl_uni2 %>% as.data.frame %>% pull(Genus)
-
-ResponseNetwork2 %v% "Sensationalism" <- Graph_tbl_uni2 %>% as.data.frame %>% pull(Sensationalism)
-
-ResponseNetwork2 %v% "Temporal_span" <- Graph_tbl_uni2 %>% as.data.frame %>% pull(Temporal_span)
+ResponseNetwork2 %v% "year" <- Graph_unipartite2 %>% as.data.frame %>% pull(year)
+ResponseNetwork2 %v% "Bite" <- Graph_unipartite2 %>% as.data.frame %>% pull(Bite) 
+ResponseNetwork2 %v% "Death" <- Graph_unipartite2 %>% as.data.frame %>% pull(Death)
+ResponseNetwork2 %v% "Genus" <- Graph_unipartite2 %>% as.data.frame %>% pull(Genus)
+ResponseNetwork2 %v% "Sensationalism" <- Graph_unipartite2 %>% as.data.frame %>% pull(Sensationalism)
+ResponseNetwork2 %v% "Temporal_span" <- Graph_unipartite2 %>% as.data.frame %>% pull(Temporal_span)
+ResponseNetwork2 %v% "Distance_information" <- Graph_unipartite2 %>% as.data.frame %>% pull(Distance_information)
 
 Spatial2 <- ID_attr %>% dplyr::select(lon,lat) %>% as.matrix
 
 #Data exploration
 
 # Collinearity 
-psych::pairs.panels(Graph_tbl_uni2 %>% as.data.frame %>% select(year, Bite, Death, Sensationalism, Temporal_span))
+psych::pairs.panels(Graph_unipartite2 %>% as.data.frame %>% select(year, Bite, Death, Sensationalism, Temporal_span, Distance_information))
 
 # Model fit
 ergm0 <- ergm::ergm(ResponseNetwork2 ~ edges, estimate = "MLE")
 ergm1 <- ergm::ergm(ResponseNetwork2 ~ edges + nodefactor("Genus"), estimate = "MLE")
 ergm2 <- ergm::ergm(ResponseNetwork2 ~ edges + nodefactor("Genus") + nodecov("Sensationalism"), estimate = "MLE")
-ergm3 <- ergm::ergm(ResponseNetwork2 ~ edges + nodefactor("Genus") + nodecov("Sensationalism") + nodecov("Bite"), estimate = "MLE")
-ergm4 <- ergm::ergm(ResponseNetwork2 ~ edges + nodecov("Sensationalism") + nodecov("Bite") + nodecov("Death"), estimate = "MLE")
+ergm3 <- ergm::ergm(ResponseNetwork2 ~ edges + nodefactor("Genus") + nodecov("Sensationalism") + nodecov("Temporal_span"), estimate = "MLE")
+ergm4 <- ergm::ergm(ResponseNetwork2 ~ edges + nodefactor("Genus") + nodecov("Sensationalism") + nodecov("Temporal_span") + nodecov("Distance_information"), estimate = "MLE")
+ergm5 <- ergm::ergm(ResponseNetwork2 ~ edges + nodefactor("Genus") + nodematch("Genus") + nodecov("Sensationalism") + nodecov("Temporal_span") + nodecov("Distance_information"), estimate = "MLE")
 
-list(ergm0, ergm1, ergm2, ergm3, ergm4) %>% map_dbl(BIC) %>% plot
+list(ergm0, ergm1, ergm2, ergm3, ergm4, ergm5) %>% map_dbl(BIC) %>% plot
 
-ergm_BIC2 <- ergm4 ; rm(ergm0, ergm1, ergm2, ergm3, ergm4)
+ergm_BIC2 <- ergm1 # best model
 
 # Model validation
 
@@ -813,14 +854,7 @@ EstimateDF2 %>% ggplot2::ggplot(aes(Variable, Estimate)) +
   geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2) +
   geom_point() + theme_custom() + coord_flip()
 
-
 #########################################
-
-
-
-
-
-
 
 # Country search ----------------------------------------------------------
 
