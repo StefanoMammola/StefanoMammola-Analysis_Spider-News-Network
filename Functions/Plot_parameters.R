@@ -46,8 +46,8 @@ axis_labels_sjPlot_m3 = c("Number of articles",
                           "Errors",
                           "Internet users",
                           "Number of spiders",
-                          "Lenguage [Arabic]",
                           "Lenguage [English]",
+                          "Lenguage [Others]",
                           "Lenguage [Spanish]")
 
 axis_labels_ergm1 <- c("Edges", 
