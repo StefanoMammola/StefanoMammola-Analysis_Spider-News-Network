@@ -3,7 +3,6 @@
 ## Flow of spider related information
 ## Mammola, S. et al. 2021
 
-
 ###############################################################
 
 ## ------------------------------------------------------------------------
@@ -21,7 +20,6 @@
 rm(list=ls())
 
 # Loading R package -------------------------------------------------------
-
 library("Amelia")       
 library("bipartite")     
 library("dplyr")         
@@ -31,7 +29,8 @@ library("ggalt")
 library("ggplot2")
 library("ggraph")
 library("ggthemes")      
-library("gridExtra")     
+library("gridExtra")
+library("ggregplot")
 library("igraph")        
 library("lme4")
 library("magrittr")
@@ -39,152 +38,18 @@ library("maps")
 library("network")       
 library("performance")   
 library("PupillometryR") 
-library("ggregplot")
+library("scatterpie")
 library("sna")           
 library("tidygraph")
 library("tidyverse")     
 
-# Creating useful functions ------------------------------------------------
+# Loading useful functions ------------------------------------------------
 
-##########################################################
-# Function to extract characteristics of individual news #
-##########################################################
+source("Functions/Functions_spider_news.R")
 
-#id:: a subset of the original database
-extractID_attributes <- function(id){
-  
-  require("BAT") ; require("tidyverse")
-  
-  ID              <- as.character(id$ID_Event)[1] 
-  n               <- nrow(id) 
-  year            <- min(id$yr, na.rm = TRUE) 
-  lon             <- id$lon[1]
-  lat             <- id$lat[1]
-  
-  Temporal_span   <- ifelse(is.na(min(id$Year_news)), 
-                            NA,  
-                            length(seq(min(id$Year_news,na.rm = TRUE), max(id$Year_news,na.rm = TRUE), "days"))) 
-  
-  Country_event   <- ifelse(length(table(id$Country_event)) == 0,
-                            NA,
-                            names(sort(table(id$Country_event), decreasing = TRUE))[1])
-  
-  Genus           <- names(sort(table(id$Genus), decreasing = TRUE))[1] 
-  Sensationalism  <- sum(id$Sensationalism, na.rm = TRUE)/nrow(id) 
-  Taxonomic_error <- sum(id$Taxonomic_error, na.rm = TRUE)/nrow(id) 
-  Venom_error     <- sum(id$Venom_error, na.rm = TRUE)/nrow(id) 
-  Anatomy_error   <- sum(id$Anatomy_error, na.rm = TRUE)/nrow(id) 
-  Photo_error     <- sum(id$Photo_error, na.rm = TRUE)/nrow(id) 
-  Bite            <- sum(id$Bite, na.rm = TRUE)/nrow(id) 
-  Death           <- sum(id$Death, na.rm = TRUE)/nrow(id)
-  
-  Distance_news <- ifelse(nrow(id) == 1,
-                          NA,
-                          id %>% select(Species,Bite,Death,Figure_species,
-                                        Figure_bite,Taxonomic_error,Venom_error,
-                                        Anatomy_error,Photo_error) %>% BAT::gower(convert=c(1:9)) 
-                          
-  ) #get news distance
-  
-  Distance_information <- ifelse(is.na(Distance_news), NA, mean(as.matrix(Distance_news)[,1]))
-  
-  return( data.frame(ID, n, year, Temporal_span, lon, lat,
-                     Country_event, Genus, Bite, Death,
-                     Sensationalism,
-                     Distance_information,
-                     Taxonomic_error, Venom_error, Anatomy_error, Photo_error))
-  
-}
+# Loading plot parameters -------------------------------------------------
 
-##############################################
-# Function to extract node traits in a graph #
-##############################################
-
-# For a discussion:
-# https://medium.com/@615162020004/social-network-analysis-with-r-centrality-measure-86d7fa273574
-
-# Graph should be a tidygraph dataset
-
-NodeTraitGet <- function(Graph, mode = "in", dir = TRUE){
-  
-  list(
-    ID          = Graph %>% activate(nodes) %>% as.data.frame %>% pull(1),
-    Degree      = degree(Graph, mode = mode),
-    Strength    = strength(Graph, mode = mode),
-    Eigenvector = Graph %>% eigen_centrality(directed = dir) %>% extract2("vector"),
-    Betweenness = Graph %>% betweenness(directed = dir),
-    Closeness   = Graph %>% closeness(mode = mode)
-    
-    # Eigenvector_Weighted = Graph %>% 
-    #   eigen_centrality(weights = Graph %>% activate(edges) %>% pull(weight)) %>% 
-    #   extract2("vector"),
-    #<< 
-    
-    #Clustering = Graph %>% transitivity(type = "local"),
-    
-  )
-}
-
-#########################################
-# Function to extract graph-level stats #
-#########################################
-
-# Graph should be an iGraph object
-
-NetworkTraitGet <- function(Graph){
-  
-  data.frame(
-    
-    Size = vcount(Graph),
-    
-    Diameter = diameter(Graph),
-    
-    MeanDegree = mean(igraph::degree(Graph)),
-    
-    DegreeVariance = sd(igraph::degree(Graph)),
-    
-    Components = igraph::components(Graph)$no,
-    
-    Transitivity = transitivity(Graph),
-    
-    Density = ggregplot::Prev(get.adjacency(Graph, sparse = F) > 0),
-    
-    LouvainModularity = Graph %>% cluster_louvain %>% membership %>% modularity(Graph, .)
-    
-  ) %>% return
-  
-}
-
-#################################
-# Other miscellaneous functions #
-#################################
-
-range01 <- function(x){(x-min(x))/(max(x)-min(x))} #Range
-
-# Plot parameters ---------------------------------------------------------
-
-theme_custom <- function(){
-  theme_bw() +
-    theme(#text = element_text(family = "Arial"),
-      axis.text = element_text(size = 14), 
-      axis.title = element_text(size = 18),
-      axis.line.x = element_line(color="black"), 
-      axis.line.y = element_line(color="black"),
-      panel.border = element_blank(),
-      panel.grid.major.x = element_blank(),                                          
-      panel.grid.minor.x = element_blank(),
-      panel.grid.minor.y = element_blank(),
-      panel.grid.major.y = element_blank(),  
-      plot.margin = unit(c(1, 1, 1, 1), units = , "cm"),
-      plot.title = element_text(size = 18, vjust = 1, hjust = 0),
-      legend.text = element_text(size = 12),          
-      legend.title = element_blank(),                              
-      legend.position = c(0.95, 0.15), 
-      legend.key = element_blank(),
-      legend.background = element_rect(color = "black", 
-                                       fill = "transparent", 
-                                       size = 2, linetype = "blank"))
-}
+source("Functions/Plot_parameters.R")
 
 ###############################################################
 
@@ -213,7 +78,6 @@ levels(db$ID_Event) <- c(paste(rep("R",nlevels(db$ID_Event)),1:nlevels(db$ID_Eve
 
 #Type of Event
 db <- db %>% mutate(TypeEvent = Bite + Death)
-
 db$TypeEvent <- as.factor(db$TypeEvent) ; levels(db$TypeEvent) <- c("Encounter","Bite","Deadly bite")
 
 #Total number of Errors
@@ -232,26 +96,13 @@ db$TotalExpert <- ifelse(db$TotalExpert > 0 , 1 , 0) #converting to binary
 #Date
 db$Year_news   <-  as.Date(paste(db$d,db$m,db$yr,sep="/"),format='%d/%m/%Y')
 
+# Subset databases --------------------------------------------------------
+
 #Database only with distinct event
 db_unique_event <- distinct(db, ID_Event, .keep_all = TRUE) 
 
 #Database only with distinct news
 db_unique_news  <- distinct(db, ID, .keep_all = TRUE) 
-
-# Loading country attribute database ------------------------------------------
-
-# country_attr <- read.csv(file = "Data/Country_attributes/CountryAttributes.csv", sep = '\t', dec = ',', header = TRUE, as.is = FALSE)
-# cat <- read.csv(file = "Data/Country_attributes/Catherine_SPIDER_data.csv", sep = '\t', dec = ',', header = TRUE, as.is = FALSE)
-# jag <- read.csv(file = "Data/Country_attributes/Jagoba_Country_Data.csv", sep = '\t', dec = ',', header = TRUE, as.is = FALSE)
-# 
-# country_attr <- country_attr %>% left_join(jag, by = "Country")
-# country_attr <- country_attr %>% left_join(cat, by = "Country")
-# 
-# write_csv(country_attr, "Data/CountryAttributes_new.csv")
-# 
-# library("xlsx")
-# 
-# write.xlsx(country_attr, "Data/CountryAttributes_new.xlsx", row.names = FALSE)
 
 ###############################################################
 
@@ -283,8 +134,8 @@ sum(db_unique_news$Expert_others, na.rm = TRUE) / nrow(db) * 100
 
 #Number of unique species involved
 nlevels(droplevels(db$Species))
-
-as.character(sort(unique(droplevels(db$Species))))
+as.character(sort(unique(droplevels(db$Species)))) #id of species
+sort(table(db$Species))
 
 #Number of country and news country
 nlevels(droplevels(db_unique_news$Country_search)) 
@@ -293,12 +144,68 @@ sort(table(db_unique_news$Country_search))
 #Number of lenguages
 nlevels(droplevels(db$Lenguage)) 
 
-sort(table(db$Species))
-
 #Distinct event
 table(db_unique_news$TypeEvent)
 
 # Create attribute table for Network analysis -----------------------------
+
+#############################
+# At the Country level ######
+#############################
+
+# Loading country-level attributes
+
+CountryAttributes <- read.csv(file = "Data/CountryAttributes_Demography.csv", sep = '\t', dec = ',', header = TRUE, as.is = FALSE)
+
+# Summarizing country attributes from the Spider news database
+country_attr <- db %>% dplyr::select(Country_search,
+                                     Sensationalism,
+                                     TotalError,
+                                     Lenguage,
+                                     lon3,
+                                     lat3) %>% group_by(Country_search) %>% 
+  summarise(N = length(Country_search),
+            Sensationalism = sum(Sensationalism, na.rm = TRUE)/length(Sensationalism), #proportion of sensationalistic news/country
+            TotalError = sum(TotalError, na.rm = TRUE)/length(TotalError), #proportion of news with error/country
+            Lenguage = names(sort(table(Lenguage), decreasing = TRUE))[1], #main country lenguage
+            lon = mean(lon3), #Longitude
+            lat = mean(lat3)) #latitude
+
+# All language with less than 10 country become "Others":
+country_attr$Lenguage <- ifelse(country_attr$Lenguage %in% names(which(table(country_attr$Lenguage)>9)), country_attr$Lenguage , "Others")
+
+# Add Countries with no News
+NoNews <- data.frame(Country_search = c("Botswana", "Iceland"),
+                        N = c(0,0),
+                        Sensationalism = c(0,0),
+                        TotalError = c(0,0),
+                        Lenguage = c("English","English"),
+                        lon = c(23.90,-19.22),
+                        lat = c(-21.60,64.82))
+
+country_attr <- rbind(country_attr,NoNews)
+
+# Check that the two databases match
+unique(CountryAttributes$Country %in% country_attr$Country_search) #should be TRUE
+
+# Merge and clean
+country_attr <- country_attr %>% dplyr::left_join(CountryAttributes, by = c("Country_search" = "Country")) %>% 
+    dplyr::select(Country_search,
+                  N,
+                  Sensationalism,
+                  TotalError,
+                  Lenguage,
+                  lon, 
+                  lat, 
+                  ISA, #number of arachnologist in the country.
+                  Education_index = Education_Index_2019,  
+                  Internet_users  = Internet_users_2018,
+                  N_newspapers    = Number_newspapers_Mean1996.2005,
+                  Press_Freedom = Press_Freedom_Index,
+                  N_Spiders = N_Spiders_WSC,
+                  N_Deadly_Spiders = N_Deadly_WSC)
+                  
+rm(country_0, CountryAttributes) #clean
 
 #########################
 # At the ID_Event level #
@@ -310,36 +217,26 @@ sort(table(db$ID_Event), decreasing = TRUE)
 ID_attr <- db %>% filter(ID_Event == levels(ID_Event)[1]) %>%
   arrange(Year_news) %>% droplevels() %>% extractID_attributes #first event
 
-for(i in 2:nlevels(db$ID_Event)) #takes about 1 minutes!
+#takes about 1 minutes::
+for(i in 2:nlevels(db$ID_Event)) 
   ID_attr <- db %>% filter(ID_Event == levels(ID_Event)[i]) %>% arrange(Year_news) %>% droplevels() %>%
   extractID_attributes %>% bind_rows(ID_attr) #all others
 
 ID_attr %<>% mutate_all(function(x) ifelse(is.infinite(x), NA, x)) #convert infinite to NA
 
-ID_attr %>% head(20)
-
 # All genus with less than 50 occurrence become "Others":
 ID_attr$Genus <- ifelse(ID_attr$Genus %in% names(which(table(ID_attr$Genus)>50)), ID_attr$Genus, "Others")
 
 # check
-ggplot(data = ID_attr, aes(x= Distance_information, y= Temporal_span)) + geom_point() + theme_custom()
+ggplot(data = ID_attr, aes(x = Distance_information, y = Temporal_span)) + geom_point() + theme_custom()
 
 rm(i) #clean
 
-#########################
-# General plot ##
-#########################
+###############################################################
 
-# Countries with no news --------------------------------------------------
+## Figure map:
 
-Botwsana   <- c(23.90,  -21.60)
-Iceland    <- c(-19.22,  64.82)
-
-NoNews <- rbind(Botwsana,
-                Iceland) %>% 
-  as.data.frame()
-
-colnames(NoNews) <- c("long","lat")
+###############################################################
 
 # Making the map ----------------------------------------------------------
 
@@ -378,31 +275,10 @@ pie <- unique(dplyr::left_join(x  = pie,
   geom_point(data = db, 
                aes(x = lon, y = lat), size = 0.5,
                alpha = 0.7, color="grey10",
-               stroke = 0.8)+
-   
-   # geom_point(data = Country, 
-   #            aes(x = lon, y = lat, size = N_news),
-   #            alpha = 0.9, colour = "black",fill="blue",
-   #            shape = 21,stroke = 0.8)+
-    theme_map()+
-   # theme(legend.position = "bottom",
-   #       legend.text = element_text(size = 12),
-   #       legend.title = element_text(size = 12),
-   theme(
-     axis.line=element_blank(),axis.text.x=element_blank(),
-     axis.text.y=element_blank(),axis.ticks=element_blank(),
-     axis.title.x=element_blank(),
-     axis.title.y=element_blank(),legend.position="none",
-     panel.background=element_rect(fill = "white", colour = "white"),
-     panel.border=element_blank(),panel.grid.major=element_blank(),
-     panel.grid.minor=element_blank(),
-     plot.background= element_rect(fill = "white", colour = "white"))
- 
+               stroke = 0.8)+ 
+    
+    ggthemes::theme_map() + theme_map_custom
 )
-
-library("scatterpie")
-
-color_maps    <- c("turquoise3", "orangered", "grey10")
 
 (map2 <- map1 + scatterpie::geom_scatterpie(data = pie, aes(x=lon, y= lat, group = Country, r = radius),
                                  cols = c("Encounter","Bite","Deadly_bite"), alpha=.8) + 
@@ -411,54 +287,7 @@ color_maps    <- c("turquoise3", "orangered", "grey10")
                          x= -150, 
                          y= -35, n = 3, 
                          labeller = function (x) x=c(min(pie$n),round(mean(pie$n),0),max(pie$n)))+
-  scale_fill_manual("",labels = c("Encounter","Bite","Deadly bite"), values = color_maps))
-
-
-
-#########
-
-#########################
-# At the Country level ##
-#########################
-
-# Loading country-level attributes
-
-CountryAttributes <- read.csv(file = "Data/CountryAttributes.csv", sep = '\t', dec = '.', header = TRUE, as.is = FALSE)
-
-str(CountryAttributes)
-
-# Summarizing country attributes
-country_attr <- db %>% dplyr::select(Country_search,
-                                      Sensationalism,
-                                      TotalError,
-                                      Lenguage,
-                                      lon3,
-                                      lat3) %>% group_by(Country_search) %>% 
-  summarise(N = length(Country_search),
-            Sensationalism = sum(Sensationalism, na.rm = TRUE)/length(Sensationalism), #proportion of sensationalistic news/country
-            TotalError = sum(TotalError, na.rm = TRUE)/length(TotalError), #proportion of news with error/country
-            Lenguage = names(sort(table(Lenguage), decreasing = TRUE))[1], #main country lenguage
-            lon = mean(lon3), #Longitude
-            lat = mean(lat3)) #latitude
-
-# All language with less than 10 country become "Others":
-country_attr$Lenguage <- ifelse(country_attr$Lenguage %in% names(which(table(country_attr$Lenguage)>9)), country_attr$Lenguage , "Others")
-
-# Add Countries with no News
-country_0 <- data.frame(Country_search = c("Botswana", "Iceland"),
-                        N = c(0,0),
-                        Sensationalism = c(0,0),
-                        TotalError = c(0,0),
-                        Lenguage = c("English","English"),
-                        lon = c(23.90,-19.22),
-                        lat = c(-21.60,64.82))
-
-country_attr <- rbind(country_attr,country_0)
-
-# Add CountryAttributes
-country_attr <- country_attr %>% left_join(CountryAttributes, by = c("Country_search" = "Country"))
-
-rm(country_0) #clean
+  scale_fill_manual("",labels = c("Encounter","Bite","Deadly bite"), values = color_event))
 
 ###############################################################
 
@@ -503,7 +332,6 @@ rm(rename)
 
 # Data exploration --------------------------------------------------------
 
-
 # Creating a database for models
 db_m <- db %>% dplyr::select(
   Sensationalism,
@@ -541,6 +369,7 @@ nrow(db_m)
 
 # Fitting the model: Sensationalism ---------------------------------------
 
+# Fit the model
 m1 <- lme4::glmer(Sensationalism ~ yr + Type_of_newspaper + Circulation + TypeEvent + Figure_species + Figure_bite +
                     TotalError.01 + Expert_doctor + Expert_arachnologist + Expert_others +
                     (1|ID_Event) + (1|Genus) + (1|Lenguage2) + (1|Country_search2), 
@@ -561,19 +390,25 @@ plot(db_m$lat2, R_m1, xlab = "Latitude",  ylab = "Residuals",  main = "Residuals
 boxplot(R_m1 ~ as.factor(db_m$m), xlab = NULL, ylab = "Residuals",  main = "Residuals vs month")
 boxplot(R_m1 ~ as.factor(db_m$yr), xlab = NULL,  ylab = "Residuals",  main = "Residuals vs year")
 
-rm(R_m1)
-
 # Interpret the model
 parameters::model_parameters(m1)
-
 performance::r2(m1)
 
-sjPlot::plot_model(m1, title ="Factors explaining the probability a news story being sensationalistic",
-                   sort.est = TRUE,  vline.color = "grey80",
-                   show.values = TRUE, value.offset = .3, se = TRUE, show.p = TRUE) + theme_custom()
+# Plot
+(plot_model1 <- sjPlot::plot_model(m1, 
+                                   title = title_sjPlot_m1,
+                                   sort.est = FALSE,  
+                                   vline.color = "grey80",
+                                   color = "grey5",
+                                   axis.title = xlab_sjPlot_m1_m2, #"Odds ratios ",
+                                   axis.labels = rev(axis_labels_sjPlot), #rev cause it traspose x and y axes
+                                   show.values = TRUE, 
+                                   value.offset = .3, 
+                                   se = TRUE, 
+                                   show.p = TRUE) + theme_custom()
+)
 
 # Fitting the model: Errors ---------------------------------------
-
 m2 <- lme4::glmer(TotalError.01 ~ yr + Type_of_newspaper + Circulation + TypeEvent +
                       Sensationalism + Expert_doctor + Expert_arachnologist + Expert_others +
                     (1|ID_Event) + (1|Genus) + (1|Lenguage2) + (1|Country_search2), 
@@ -594,16 +429,23 @@ plot(db_m$lat2, R_m2, xlab = "Latitude",  ylab = "Residuals",  main = "Residuals
 boxplot(R_m2 ~ as.factor(db_m$m), xlab = NULL, ylab = "Residuals",  main = "Residuals vs month")
 boxplot(R_m2 ~ as.factor(db_m$yr), xlab = NULL,  ylab = "Residuals",  main = "Residuals vs year")
 
-rm(R_m2)
-
 # Interpret the model
 parameters::model_parameters(m2)
-
 performance::r2(m2)
 
-sjPlot::plot_model(m2, title ="Factors explaining the probability a news story containing error",
-                   sort.est = TRUE,  vline.color = "grey60",
-                   show.values = TRUE, value.offset = .3, se = TRUE, show.p = TRUE) + theme_custom()
+# Plot
+(plot_model2 <- sjPlot::plot_model(m2, 
+                                   title = title_sjPlot_m2,
+                                   sort.est = FALSE,  
+                                   vline.color = "grey80",
+                                   color = "grey5",
+                                   axis.title = xlab_sjPlot_m1_m2, 
+                                   axis.labels = rev(axis_labels_sjPlot), 
+                                   show.values = TRUE, 
+                                   value.offset = .3, 
+                                   se = TRUE, 
+                                   show.p = TRUE) + theme_custom()
+)
 
 ###############################################################
 
@@ -611,22 +453,13 @@ sjPlot::plot_model(m2, title ="Factors explaining the probability a news story c
 
 ###############################################################
 
-# Constructing a network --------------------------------------------------
-
-db_graph <- db %>% dplyr::select(Country_search,ID_Event) %>% table() 
-
-dim(db_graph)
-
-# Bi-partite network Country search -----> News ID_Event
-Graph_bipartite <- igraph::graph_from_incidence_matrix(db_graph, directed = TRUE)
-
-V(Graph_bipartite)$type
-print(Graph_bipartite, e=TRUE, v=TRUE)
-vcount(Graph_bipartite) ; ecount(Graph_bipartite)
-
-# Get attribute table
-Graph_tbl_bip <- tidygraph::as_tbl_graph(Graph_bipartite, directed = TRUE)  
-
+# Constructing a  network -----------------------------------------
+Graph_bipartite <- db %>% 
+            dplyr::select(Country_search,ID_Event) %>% 
+            table() %>% 
+            igraph::graph_from_incidence_matrix(directed = TRUE) %>% 
+            tidygraph::as_tbl_graph(directed = TRUE) 
+ 
 # Collapse it into an unipartite 
 Graph_unipartite_full <- igraph::bipartite_projection(Graph_bipartite)
 
@@ -643,32 +476,24 @@ Graph_unipartite_full <- igraph::bipartite_projection(Graph_bipartite)
 #--------------------------------------------------------------------------
 
 # Takes the unipartite project graph
-Graph_unipartite <- Graph_unipartite_full$proj1
-Graph_unipartite #note that it loses the directionality
-
-# Summary stats
-NetworkTraitGet(Graph_unipartite)
-
-# Get the adjacency matrix
-Graph_adj_matrix <- Graph_unipartite %>% get.adjacency(attr = "weight", sparse = FALSE)
-
-# Get attribute table
-Graph_tbl_uni <- Graph_unipartite %>% as_tbl_graph(directed = TRUE) %>% 
+Graph_unipartite <- Graph_unipartite_full$proj1  %>% as_tbl_graph(directed = TRUE) %>% 
   activate(edges) %>% #%>% mutate(weight = 1) 
   igraph::simplify(edge.attr.comb = "sum") %>% 
   as_tbl_graph
 
-# Calculating node level traits 
-node_trait <- Graph_tbl_uni %>% 
-                   NodeTraitGet(mode = "in", dir = FALSE) %>% bind_cols()
+# Summary stats
+NetworkTraitGet(Graph_unipartite)
 
+# Calculating node level traits 
+node_trait <- Graph_unipartite %>% 
+                   NodeTraitGet(mode = "in", dir = FALSE) %>% bind_cols()
 node_trait
 
-# Combine them with the Country
-country_attr <- country_attr %>% left_join(node_trait, by = c("Country_search" = "ID"))
+# Combine them with the Country attributes
+country_attr <- country_attr %>% dplyr::left_join(node_trait, by = c("Country_search" = "ID"))
 
 # Attach them to the Graph_tbl_uni
-Graph_tbl_uni <- Graph_tbl_uni %>% tidygraph::activate(nodes) %>% 
+Graph_unipartite <- Graph_unipartite %>% tidygraph::activate(nodes) %>% 
   left_join(country_attr, by = c("name" = "Country_search"))
 
 ########################
@@ -677,11 +502,11 @@ Graph_tbl_uni <- Graph_tbl_uni %>% tidygraph::activate(nodes) %>%
 
 # Plot the network [comparing three layouts]
 SpatialLayout <- country_attr[1:79,] %>% dplyr::select(lon,lat) %>% as.matrix #geo-coordinates
-Layout2       <- layout_with_kk(Graph_tbl_uni) # Kamada-Kawai
-Layout3       <- layout_with_mds(Graph_tbl_uni) # Multi-dimensional scaling
+Layout2       <- layout_with_kk(Graph_unipartite) # Kamada-Kawai
+Layout3       <- layout_with_mds(Graph_unipartite) # Multi-dimensional scaling
 
 #SpatialLayout
-Graph_tbl_uni %>% igraph::simplify(edge.attr.comb = "sum") %>% ggraph::ggraph(SpatialLayout) +
+Graph_unipartite %>% igraph::simplify(edge.attr.comb = "sum") %>% ggraph::ggraph(SpatialLayout) +
   geom_edge_density(fill="orange", alpha=1) +
   geom_edge_fan(aes(width=weight),color="gray60", alpha=0.1) +
   geom_node_point(col="grey30", alpha = .8, 
@@ -691,7 +516,7 @@ Graph_tbl_uni %>% igraph::simplify(edge.attr.comb = "sum") %>% ggraph::ggraph(Sp
   theme_void() + theme(legend.position = "bottom",legend.direction = "vertical")+ coord_fixed()
 
 #Layout2
-Graph_tbl_uni %>% igraph::simplify(edge.attr.comb = "sum") %>% ggraph::ggraph(Layout2) +
+Graph_unipartite %>% igraph::simplify(edge.attr.comb = "sum") %>% ggraph::ggraph(Layout2) +
   geom_edge_density(fill="orange", alpha=0.9) +
   geom_edge_fan(aes(width=weight),color="gray70", alpha=0.1) +
   geom_node_point(col="grey30", alpha = .8, 
@@ -701,7 +526,7 @@ Graph_tbl_uni %>% igraph::simplify(edge.attr.comb = "sum") %>% ggraph::ggraph(La
   theme_void() + theme(legend.position = "bottom",legend.direction = "vertical")+ coord_fixed()
 
 #Layout3
-Graph_tbl_uni %>% igraph::simplify(edge.attr.comb = "sum") %>% ggraph::ggraph(Layout3) +
+Graph_unipartite %>% igraph::simplify(edge.attr.comb = "sum") %>% ggraph::ggraph(Layout3) +
   geom_edge_density(fill="orange", alpha=0.9) +
   geom_edge_fan(aes(width=weight),color="gray70", alpha=0.1) +
   geom_node_point(col="grey30", alpha = .8, 
@@ -709,26 +534,44 @@ Graph_tbl_uni %>% igraph::simplify(edge.attr.comb = "sum") %>% ggraph::ggraph(La
   scale_fill_manual(values = c("blue", "orange", "turquoise","purple", "grey15"))+
   geom_node_text(aes(label = name), size=2, color="gray10", repel=TRUE) +
   theme_void() + theme(legend.position = "bottom",legend.direction = "vertical")+ coord_fixed()
+# 
+# 
+
+m3 <- lme4::glmer.nb(Degree.x ~
+                       scale(Sensationalism) +
+                       scale(ISA) +
+                       scale(Internet_users) +
+                       scale(N_newspapers) +
+                       scale(N_Spiders) +
+                       (1|Lenguage) ,
+                  #family = "poisson",
+                  data = country_attr,
+                  control = glmerControl(optimizer="bobyqa")
+)
+
+summary(m1)
+performance::check_model(m1)
+sjPlot::plot_model(m1)
 
 ###################################
 # Exponential Random Graph Models #
 ###################################
 
-#Convert the Adjacency matrix to incidence
-AdjMatrix <- Graph_adj_matrix
+# Get the adjacency matrix
+AdjMatrix <- Graph_unipartite %>% get.adjacency(attr = "weight", sparse = FALSE)
 
 AdjMatrix[AdjMatrix>0] <- 1  
 
 dim(AdjMatrix) #check it's a square
 
 #Assign row and col names
-colnames(AdjMatrix) <- rownames(AdjMatrix) <- Graph_tbl_uni %>% activate(nodes) %>% pull(name)
+colnames(AdjMatrix) <- rownames(AdjMatrix) <- Graph_unipartite %>% activate(nodes) %>% pull(name)
 
 #Response variables
 ResponseNetwork <- AdjMatrix %>% as.matrix %>% network::network(directed = FALSE)
 
 #Adding node-level attributes
-Graph_tbl_uni %>% as.data.frame %>% colnames
+Graph_unipartite %>% as.data.frame %>% colnames
 
 ResponseNetwork %v% "N" <- Graph_tbl_uni %>% as.data.frame %>% pull(N)
 
@@ -824,8 +667,10 @@ EstimateDF %>% ggplot2::ggplot(aes(Variable, Estimate)) +
 #--------------------------------------------------------------------------
 
 # Takes the unipartite project graph
-Graph_unipartite2 <- Graph_unipartite_full$proj2
-Graph_unipartite2 #note that it loses the directionality
+Graph_unipartite2 <- Graph_unipartite_full$proj2 %>% as_tbl_graph(directed = FALSE) %>% 
+  activate(edges) %>% #%>% mutate(weight = 1) 
+  igraph::simplify(edge.attr.comb = "sum") %>% 
+  as_tbl_graph#note that it loses the directionality
 
 # Summary stats
 NetworkTraitGet(Graph_unipartite2)
@@ -835,14 +680,8 @@ NetworkTraitGet(Graph_unipartite2)
 # Get the adjacency matrix
 Graph_adj_matrix2 <- Graph_unipartite2 %>% get.adjacency(sparse = FALSE)
 
-# Get attribute table
-Graph_tbl_uni2 <- Graph_unipartite2 %>% as_tbl_graph(directed = FALSE) %>% 
-  activate(edges) %>% #%>% mutate(weight = 1) 
-  igraph::simplify(edge.attr.comb = "sum") %>% 
-  as_tbl_graph
-
 # Calculating node level traits (warning: takes about 1 minute)
-node_trait2 <- Graph_tbl_uni2 %>% 
+node_trait2 <- Graph_unipartite2 %>% 
   NodeTraitGet(mode = "in", dir = FALSE) %>% bind_cols()
 
 node_trait2 %>% head
@@ -851,11 +690,10 @@ node_trait2 %>% head
 ID_attr <- ID_attr %>% left_join(node_trait2, by = c("ID" = "ID"))
 
 # Attach them to the Graph_tbl_uni
-Graph_tbl_uni2 <- Graph_tbl_uni2 %>% tidygraph::activate(nodes) %>% 
-  left_join(ID_attr, by = c("name" = "ID"))
+Graph_unipartite2 <- Graph_unipartite2 %>% tidygraph::activate(nodes) %>% left_join(ID_attr, by = c("name" = "ID"))
 
 # Check some patterns
-db2 <- Graph_tbl_uni2 %>% activate(nodes) %>% as.data.frame
+db2 <- Graph_unipartite2 %>% activate(nodes) %>% as.data.frame
 
 db2 %>% ggplot(aes(x = year, y = Degree)) + geom_point() + theme_custom()
 db2 %>% ggplot(aes(x = Distance_information, y = Degree)) + geom_point() + theme_custom()
@@ -864,8 +702,6 @@ db2 %>% ggplot(aes(x = Genus, y = Degree)) + geom_boxplot() + theme_custom()
 db2 %>% ggplot(aes(x = Temporal_span, y = Degree)) + geom_point() + theme_custom()
 db2 %>% ggplot(aes(x = Death, y = Degree)) + geom_point() + theme_custom()
 db2 %>% ggplot(aes(x = Bite, y = Temporal_span)) + geom_point() + theme_custom()
-
-
 
 db3 <- db2[!is.na(db2$year),]
 db3 <- db3[!is.na(db3$Temporal_span),]
