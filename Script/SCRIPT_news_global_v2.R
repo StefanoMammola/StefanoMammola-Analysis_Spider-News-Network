@@ -35,10 +35,10 @@ library("igraph")
 library("lme4")
 library("MASS")
 library("magrittr")
-library("maps")          
 library("network")       
 library("performance")   
 library("PupillometryR") 
+library("rworldmap")
 library("scatterpie")
 library("sna")           
 library("tidygraph")
@@ -206,7 +206,7 @@ country_attr <- country_attr %>% dplyr::left_join(CountryAttributes, by = c("Cou
                   N_Spiders = N_Spiders_WSC,
                   N_Deadly_Spiders = N_Deadly_WSC)
                   
-rm(country_0, CountryAttributes) #clean
+rm(CountryAttributes) #clean
 
 #########################
 # At the ID_Event level #
@@ -228,7 +228,7 @@ ID_attr %<>% mutate_all(function(x) ifelse(is.infinite(x), NA, x)) #convert infi
 # All genus with less than 50 occurrence become "Others":
 ID_attr$Genus <- ifelse(ID_attr$Genus %in% names(which(table(ID_attr$Genus)>50)), ID_attr$Genus, "Others")
 
-#Replace missing data
+#Replace missing data in temporal span (assuming it is 1)
 ID_attr$Temporal_span <- ifelse(is.na(ID_attr$Temporal_span) == TRUE, 1, ID_attr$Temporal_span)
 
 rm(i) #clean
@@ -239,56 +239,63 @@ rm(i) #clean
 
 ###############################################################
 
-# Making the map ----------------------------------------------------------
-
-world <- map_data("world")
-
-pie_1 <- data.frame(table(db$Country_search,db$TypeEvent))
-
+pie_1  <- data.frame(table(db$Country_search,db$Sensationalism)) ; levels(pie_1$Var2) <- c("Non_Sensationalist", "Sensationalist")
 radius <- data.frame(log(table(db$Country_search)+1)) ; rownames(radius) <- NULL
-n <- data.frame(table(db$Country_search)) ; rownames(radius) <- NULL
+n      <- data.frame(table(db$Country_search)) ; rownames(radius) <- NULL
 
 pie <- data.frame(Country = levels(pie_1$Var1),
                   n =  n$Freq,
-                  Encounter   = pie_1$Freq[1:nlevels(pie_1$Var1)],
-                  Bite        = pie_1$Freq[c(nlevels(pie_1$Var1)+1):(2*c(nlevels(pie_1$Var1)))],
-                  Deadly_bite = pie_1$Freq[(2*(c(nlevels(pie_1$Var1)))+1):c(nrow(pie_1))],
+                  Non_Sensationalist = pie_1$Freq[1:nlevels(pie_1$Var1)],
+                  Sensationalist  = pie_1$Freq[c(nlevels(pie_1$Var1)+1):(2*c(nlevels(pie_1$Var1)))],
                   radius      = (radius$Freq)*0.8)
 
 pie <- unique(dplyr::left_join(x  = pie, 
                                y  = data.frame(Country = db$Country_search, lon = db$lon3, lat = db$lat3), 
                                by = "Country", copy = FALSE)) 
 
-(map1 <- ggplot() +
-   geom_map(map = world, data = world,
-            aes(long, lat, map_id = region),
-            color = "grey70", fill = "grey90", size = 0.3) +
+net_map <- getMap(resolution="high") %>% 
+        ggplot() +
+        geom_polygon(aes(long,lat, group=group), colour="black", fill="black", size = 0.25)+
+  ylim(-56.8,90)+ xlim(-180,195)+
+  geom_curve(aes(x = jitter(lon3,0.0001), 
+                 y = jitter(lat3,0.0001), 
+                 xend = jitter(lon, 0.0001), 
+                 yend = jitter(lat, 0.0001)),
+             data = db, curvature = 0.24,lwd=0.4,
+             alpha = 0.05,  color = "aquamarine")+#"#FFEA46FF")+
+ 
+  geom_point(data = db_unique_event, 
+               aes(x = lon, y = lat), size = 0.3,
+               alpha = 0.9, color="aquamarine",
+               stroke = 0.8)+
+  
+  ggthemes::theme_map()+
+  theme( 
+    axis.line=element_blank(),axis.text.x=element_blank(),
+    axis.text.y=element_blank(),axis.ticks=element_blank(),
+    axis.title.x=element_blank(),
+    axis.title.y=element_blank(),legend.position="none",
+    panel.background=element_rect(fill ="gray40", colour="gray40"),
+    panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),
+    plot.background=element_rect(fill ="gray40", colour="gray40")
+  )
 
-   ylim(-56.8,90)+ xlim(-180,195)+
-   
-   geom_curve(aes(x = jitter(lon3,0.0001), 
-                  y = jitter(lat3,0.0001), 
-                  xend = jitter(lon, 0.0001), 
-                  yend = jitter(lat, 0.0001)),
-              data = db, curvature = 0.24,lwd=0.6,
-              alpha = 0.1,  color = "grey10") +
-    
-  geom_point(data = db, 
-               aes(x = lon, y = lat), size = 0.5,
-               alpha = 0.7, color="grey10",
-               stroke = 0.8)+ 
-    
-    ggthemes::theme_map() + theme_map_custom
-)
+net_map_full <- net_map + scatterpie::geom_scatterpie(data = pie, aes(x=lon, y= lat, group = Country, r = radius),
+                                            cols = c("Non_Sensationalist","Sensationalist"), alpha=.9) +
+    theme(legend.position = c(0.03, 0.2),
+          legend.text = element_text(size = 10),
+          legend.background = element_rect(fill = "gray40", colour="transparent"))+
+    geom_scatterpie_legend(pie$radius,
+                           x= -165,
+                           y= -45, n = 3,
+                           labeller = function (x) x=c(min(pie$n),500,max(pie$n)))+
+    scale_fill_manual("",labels = c("Non Sensationalist","Sensationalist"), values = c("blue","purple"))
 
-(map2 <- map1 + scatterpie::geom_scatterpie(data = pie, aes(x=lon, y= lat, group = Country, r = radius),
-                                 cols = c("Encounter","Bite","Deadly_bite"), alpha=.8) + 
-  theme(legend.position = "top",legend.text = element_text(size = 8))+ 
-  geom_scatterpie_legend(pie$radius, 
-                         x= -150, 
-                         y= -35, n = 3, 
-                         labeller = function (x) x=c(min(pie$n),round(mean(pie$n),0),max(pie$n)))+
-  scale_fill_manual("",labels = c("Encounter","Bite","Deadly bite"), values = color_event))
+ggsave("Figures/network_map.pdf", net_map_full, device=cairo_pdf)
+
+rm(pie, pie_1, n, radius, net_map) #clean
 
 ###############################################################
 
