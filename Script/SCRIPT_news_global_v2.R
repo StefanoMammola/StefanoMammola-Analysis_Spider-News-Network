@@ -291,7 +291,7 @@ net_map_full <- net_map + scatterpie::geom_scatterpie(data = pie, aes(x=lon, y= 
                            x= -165,
                            y= -45, n = 3,
                            labeller = function (x) x=c(min(pie$n),500,max(pie$n)))+
-    scale_fill_manual("",labels = c("Non Sensationalist","Sensationalist"), values = c("blue","purple"))
+    scale_fill_manual("",labels = c("Non Sensationalist","Sensationalist"), values = c("blue","darkmagenta"))
 
 ggsave("Figures/network_map.pdf", net_map_full, device=cairo_pdf)
 
