@@ -139,7 +139,7 @@ as.character(sort(unique(droplevels(db$Species)))) #id of species
 sort(table(db$Species))
 
 #Number of country and news country
-nlevels(droplevels(db_unique_news$Country_search)) 
+nlevels(droplevels(db_unique_news$Country_search))  # +2 with no news (Botswana / Iceland)
 sort(table(db_unique_news$Country_search))
 
 #Number of lenguages
@@ -204,7 +204,7 @@ country_attr <- country_attr %>% dplyr::left_join(CountryAttributes, by = c("Cou
                   N_newspapers    = Number_newspapers_Mean1996.2005,
                   Press_Freedom = Press_Freedom_Index,
                   N_Spiders = N_Spiders_WSC,
-                  N_Deadly_Spiders = N_Deadly_WSC)
+                  N_Deadly_Spiders = N_Deadly)
                   
 rm(CountryAttributes) #clean
 
@@ -255,7 +255,7 @@ pie <- unique(dplyr::left_join(x  = pie,
 
 net_map <- getMap(resolution="high") %>% 
         ggplot() +
-        geom_polygon(aes(long,lat, group=group), colour="black", fill="black", size = 0.25)+
+        geom_polygon(aes(long,lat, group=group), colour="grey5", fill="grey5", size = 0.25)+
   ylim(-56.8,90)+ xlim(-180,195)+
   geom_curve(aes(x = jitter(lon3,0.0001), 
                  y = jitter(lat3,0.0001), 
@@ -267,33 +267,26 @@ net_map <- getMap(resolution="high") %>%
   geom_point(data = db_unique_event, 
                aes(x = lon, y = lat), size = 0.3,
                alpha = 0.9, color="aquamarine",
-               stroke = 0.8)+
-  
-  ggthemes::theme_map()+
-  theme( 
-    axis.line=element_blank(),axis.text.x=element_blank(),
-    axis.text.y=element_blank(),axis.ticks=element_blank(),
-    axis.title.x=element_blank(),
-    axis.title.y=element_blank(),legend.position="none",
-    panel.background=element_rect(fill ="gray40", colour="gray40"),
-    panel.border=element_blank(),
-    panel.grid.major=element_blank(),
-    panel.grid.minor=element_blank(),
-    plot.background=element_rect(fill ="gray40", colour="gray40")
-  )
+               stroke = 0.8) +
+  ggthemes::theme_map() + theme_map_custom
 
-net_map_full <- net_map + scatterpie::geom_scatterpie(data = pie, aes(x=lon, y= lat, group = Country, r = radius),
-                                            cols = c("Non_Sensationalist","Sensationalist"), alpha=.9) +
+figure_1 <- net_map + scatterpie::geom_scatterpie(data = pie, aes(x=lon, y= lat, group = Country, r = radius),
+                                            cols = c("Non_Sensationalist","Sensationalist"), color = "white", lwd=0.05, alpha=.8) +
     theme(legend.position = c(0.03, 0.2),
           legend.text = element_text(size = 10),
           legend.background = element_rect(fill = "gray40", colour="transparent"))+
     geom_scatterpie_legend(pie$radius,
                            x= -165,
-                           y= -45, n = 3,
-                           labeller = function (x) x=c(min(pie$n),500,max(pie$n)))+
-    scale_fill_manual("",labels = c("Non Sensationalist","Sensationalist"), values = c("blue","darkmagenta"))
+                           y= -45, n = 2,
+                           labeller = function (x) x=c(min(pie$n), max(pie$n)))+
+    scale_fill_manual("",labels = c("Not Sensationalist","Sensationalist"), values = c("blue","darkmagenta"))
 
-ggsave("Figures/network_map.pdf", net_map_full, device=cairo_pdf)
+ggplot2::ggsave("Figures/Figure_1.pdf", 
+                figure_1, 
+                device = cairo_pdf,
+                units = "cm",
+                width = 20,
+                height = 9)
 
 rm(pie, pie_1, n, radius, net_map) #clean
 
@@ -329,7 +322,6 @@ rename <- names(which(table(db$Lenguage2) < 50))
 levels(db$Lenguage2)[levels(db$Lenguage2) %in% rename]  <- "Other"
 
 # Setting baseline for factors
-
 db <- within(db, Family2 <- relevel(Family2, ref = "Other"))
 db <- within(db, Country_search2 <- relevel(Country_search2, ref = "Other"))
 db <- within(db, Circulation <- relevel(Circulation, ref = "Regional"))
@@ -380,11 +372,10 @@ nrow(db_m)
 # Fit the model
 m1 <- lme4::glmer(Sensationalism ~ yr + Type_of_newspaper + Circulation + TypeEvent + Figure_species + Figure_bite +
                     TotalError.01 + Expert_doctor + Expert_arachnologist + Expert_others +
-                    (1|ID_Event) + (1|Genus) + (1|Lenguage2) + (1|Country_search2), 
-                  data = db_m, 
-                  family = binomial(link = "logit"),
-                  control = glmerControl(optimizer="bobyqa") 
-                  )
+                    (1|ID_Event) + (1|Genus) + (1|Country_search2) + (1|Lenguage2), 
+                  data    = db_m, 
+                  family  = binomial(link = "logit"),
+                  control = glmerControl(optimizer="bobyqa"))
 
 # Check model
 performance::check_model(m1, check = c("vif", "reqq"))
@@ -399,22 +390,29 @@ boxplot(R_m1 ~ as.factor(db_m$m), xlab = NULL, ylab = "Residuals",  main = "Resi
 boxplot(R_m1 ~ as.factor(db_m$yr), xlab = NULL,  ylab = "Residuals",  main = "Residuals vs year")
 
 # Interpret the model
-parameters::model_parameters(m1)
+(fit <- parameters::model_parameters(m1))
 performance::r2(m1)
+fit$Parameter
 
+# color for plot 
+color_p_value <- ifelse(round(fit$p[2:14],3) > 0.05, 
+                        "grey5", 
+                        ifelse(fit$Coefficient[2:14] > 0, "darkmagenta", "blue"))
+                        
 # Plot
 (plot_model1 <- sjPlot::plot_model(m1, 
                                    title = title_sjPlot_m1,
                                    sort.est = FALSE,  
                                    vline.color = "grey80",
-                                   color = "grey5",
+                                   colors = "grey5",#rev(color_p_value),
                                    axis.title = xlab_sjPlot_m1_m2, #"Odds ratios ",
                                    axis.labels = rev(axis_labels_sjPlot_m1), #rev cause it traspose x and y axes
-                                   show.values = TRUE, 
+                                   show.values = FALSE, 
                                    value.offset = .3, 
                                    se = TRUE, 
-                                   show.p = TRUE) + theme_custom()
-)
+                                   show.p = FALSE) + ylim(-.8,1.4) + theme_custom())
+
+rm(fit,R_m1) #clean
 
 # Fitting the model: Errors ---------------------------------------
 m2 <- lme4::glmer(TotalError.01 ~ yr + Type_of_newspaper + Circulation + TypeEvent +
@@ -422,8 +420,7 @@ m2 <- lme4::glmer(TotalError.01 ~ yr + Type_of_newspaper + Circulation + TypeEve
                     (1|ID_Event) + (1|Genus) + (1|Lenguage2) + (1|Country_search2), 
                   data = db_m, 
                   family = binomial(link = "logit"),
-                  control = glmerControl(optimizer="bobyqa") 
-)
+                  control = glmerControl(optimizer="bobyqa"))
 
 # Check model
 performance::check_model(m2, check = c("vif", "reqq"))
@@ -438,7 +435,7 @@ boxplot(R_m2 ~ as.factor(db_m$m), xlab = NULL, ylab = "Residuals",  main = "Resi
 boxplot(R_m2 ~ as.factor(db_m$yr), xlab = NULL,  ylab = "Residuals",  main = "Residuals vs year")
 
 # Interpret the model
-parameters::model_parameters(m2)
+(fit <- parameters::model_parameters(m2))
 performance::r2(m2)
 
 # Plot
@@ -449,11 +446,23 @@ performance::r2(m2)
                                    color = "grey5",
                                    axis.title = xlab_sjPlot_m1_m2, 
                                    axis.labels = rev(axis_labels_sjPlot_m2), 
-                                   show.values = TRUE, 
+                                   show.values = FALSE, 
                                    value.offset = .3, 
                                    se = TRUE, 
-                                   show.p = TRUE) + theme_custom()
-)
+                                   show.p = FALSE) + ylim(-.8,1.4) +theme_custom())
+
+rm(fit,R_m1) #clean
+
+# Figure 2 ----------------------------------------------------------------
+
+pdf(file = "Figures/Figure_2.pdf", width = 12, height =5)
+ggpubr::ggarrange(plot_model1,plot_model2,
+                  common.legend = FALSE,
+                  hjust = -4,
+                  align = "v",
+                  labels = c("A","B"),
+                  ncol=2)
+dev.off()
 
 ###############################################################
 
@@ -461,7 +470,7 @@ performance::r2(m2)
 
 ###############################################################
 
-# Constructing a  network -----------------------------------------
+# Constructing a network -----------------------------------------
 Graph_bipartite <- db %>% 
             dplyr::select(Country_search,ID_Event) %>% 
             table() %>% 
@@ -511,38 +520,18 @@ Graph_unipartite <- Graph_unipartite %>% tidygraph::activate(nodes) %>%
 
 # Plot the network [comparing three layouts]
 SpatialLayout <- country_attr[1:79,] %>% dplyr::select(lon,lat) %>% as.matrix #geo-coordinates
-Layout2       <- layout_with_kk(Graph_unipartite) # Kamada-Kawai
-Layout3       <- layout_with_mds(Graph_unipartite) # Multi-dimensional scaling
 
 #SpatialLayout
-Graph_unipartite %>% igraph::simplify(edge.attr.comb = "sum") %>% ggraph::ggraph(SpatialLayout) +
-  geom_edge_density(fill="orange", alpha=1) +
+(plot_network <- Graph_unipartite %>% 
+  igraph::simplify(edge.attr.comb = "sum") %>% 
+  ggraph::ggraph(SpatialLayout) +
+  #geom_edge_density(fill="orange", alpha=1) +
   geom_edge_fan(aes(width=weight),color="gray60", alpha=0.1) +
   geom_node_point(col="grey30", alpha = .8, 
                   aes(size=N,fill=Lenguage), shape = 21) + 
   geom_node_text(aes(label = name), size=2, color="gray10", repel=TRUE) +
-  scale_fill_manual(values = c("blue", "orange", "turquoise","purple", "grey15"))+
-  theme_void() + theme(legend.position = "bottom",legend.direction = "vertical")+ coord_fixed()
-
-#Layout2
-Graph_unipartite %>% igraph::simplify(edge.attr.comb = "sum") %>% ggraph::ggraph(Layout2) +
-  geom_edge_density(fill="orange", alpha=0.9) +
-  geom_edge_fan(aes(width=weight),color="gray70", alpha=0.1) +
-  geom_node_point(col="grey30", alpha = .8, 
-                  aes(size=N,fill=Lenguage), shape = 21) + 
-  scale_fill_manual(values = c("blue", "orange", "turquoise","purple", "grey15"))+
-  geom_node_text(aes(label = name), size=2, color="gray10", repel=TRUE) +
-  theme_void() + theme(legend.position = "bottom",legend.direction = "vertical")+ coord_fixed()
-
-#Layout3
-Graph_unipartite %>% igraph::simplify(edge.attr.comb = "sum") %>% ggraph::ggraph(Layout3) +
-  geom_edge_density(fill="orange", alpha=0.9) +
-  geom_edge_fan(aes(width=weight),color="gray70", alpha=0.1) +
-  geom_node_point(col="grey30", alpha = .8, 
-                  aes(size=N,fill=Lenguage), shape = 21) + 
-  scale_fill_manual(values = c("blue", "orange", "turquoise","purple", "grey15"))+
-  geom_node_text(aes(label = name), size=2, color="gray10", repel=TRUE) +
-  theme_void() + theme(legend.position = "bottom",legend.direction = "vertical")+ coord_fixed()
+  scale_fill_manual(values = c("blue", "orange", "turquoise","purple", "grey15")) +
+  theme_void() + theme(legend.position = "top",legend.direction = "vertical") + coord_fixed())
 
 ###################################
 # Regression Models #
@@ -550,22 +539,35 @@ Graph_unipartite %>% igraph::simplify(edge.attr.comb = "sum") %>% ggraph::ggraph
 
 db_m3_cat <- country_attr %>% dplyr::select(Degree, Country_search, Lenguage) 
 db_m3_con <- country_attr %>% dplyr::select(N, ISA, Sensationalism, TotalError, Education_index,
-                                            Internet_users, N_Spiders, N_Deadly_Spiders,
-                                            N_newspapers
-                                            ) %>% apply(MARGIN = 2, scale) #scale all var
+                                            Internet_users,N_newspapers, N_Spiders, N_Deadly_Spiders) 
 
-db_m3 <- data.frame(db_m3_cat, db_m3_con) ; rm(db_m3_cat, db_m3_con)
+db_m3_con <- data.frame(db_m3_con)
 
-#Check collinearity
-psych::pairs.panels( db_m3 %>% dplyr::select(N, ISA, Sensationalism, TotalError, Education_index,
-                                Internet_users, N_Spiders, N_Deadly_Spiders,
-                                N_newspapers)) 
+# Check distributon
+par(mfrow = c(3,3),mar = c(2,2,2,2))
+for(i in 1:ncol(db_m3_con))
+  dotchart(as.numeric(db_m3_con[,i]), main = colnames(db_m3_con)[i])
+
+#log transform
+db_m3_con$N <- log(db_m3_con$N+1)
+db_m3_con$ISA <- log(db_m3_con$ISA+1)
+db_m3_con$N_newspapers <- log(db_m3_con$N_newspapers+1)
+
+# Check collinearity
+psych::pairs.panels(db_m3_con) 
+
 #Education index and internewt users 
-#Number of newspaper and ISA
+#Number of newspaper with N 
 #ISA and N
-#Spider and Deadly spiders
 
-db_m3 <- db_m3 %>% dplyr::select(-c(ISA,N_newspapers,Education_index,N_Deadly_Spiders))
+#Check balance of levels
+db_m3_cat$Lenguage %>% table
+
+# scale all var
+db_m3_con <- db_m3_con %>% apply(MARGIN = 2, scale) #scale cont variable
+
+#merge
+db_m3 <- data.frame(db_m3_cat, db_m3_con) ; rm(db_m3_cat, db_m3_con)
 
 # Remove missing values
 db_m3_noNA <- na.omit(db_m3)
@@ -573,8 +575,31 @@ db_m3_noNA <- na.omit(db_m3)
 # Set reference level
 db_m3_noNA$Lenguage <- as.factor(db_m3_noNA$Lenguage)
 
+# Fit the model -----------------------------------------------------------
+
+# # Set formula
+# formula_m3 <- as.formula("Degree ~ TotalError + Sensationalism + Internet_users + N_Spiders + (1|Lenguage)")
+# 
+# # Fit the model
+# m3 <- lme4::glmer(formula_m3, 
+#             data = db_m3_noNA, 
+#             family = poisson(link = "log"),
+#             control = glmerControl(optimizer="bobyqa"))
+# 
+# # Check model
+# performance::check_overdispersion(m3) #Overdispersed
+# 
+# # Switch to negative binomial
+# m3 <- lme4::glmer.nb(formula_m3, data = db_m3_noNA)
+# 
+# summary(m3)
+# performance::check_model(m3)
+# performance::r2(m3)
+# 
+# (plot_model3 <- sjPlot::plot_model(m3))
+
 # Set formula
-formula_m3 <- as.formula("Degree ~ N + Sensationalism + TotalError + Internet_users + N_Spiders + Lenguage")
+formula_m3 <- as.formula("Degree ~ Lenguage + Sensationalism + TotalError + Internet_users + N_Deadly_Spiders")
 
 # Fit the model
 m3 <- glm(formula_m3, family = "poisson", data = db_m3_noNA)
@@ -599,7 +624,7 @@ performance::r2(m3)
                                    vline.color = "grey80",
                                    color = "grey5",
                                    axis.title = xlab_sjPlot_m3, 
-                                   axis.labels = rev(axis_labels_sjPlot_m3), 
+                                   #axis.labels = rev(axis_labels_sjPlot_m3), 
                                    show.values = TRUE, 
                                    value.offset = .3, 
                                    se = TRUE, 
@@ -623,21 +648,15 @@ colnames(AdjMatrix) <- rownames(AdjMatrix) <- Graph_unipartite %>% activate(node
 ResponseNetwork <- AdjMatrix %>% as.matrix %>% network::network(directed = FALSE)
 
 #Adding node-level attributes
-Graph_unipartite %>% as.data.frame %>% colnames
-
-ResponseNetwork %v% "N"              <- Graph_unipartite %>% as.data.frame %>% pull(N)
+ResponseNetwork %v% "N"              <- Graph_unipartite %>% as.data.frame %>% dplyr::mutate(N = log(N+1)) %>% pull(N)
 ResponseNetwork %v% "Lenguage"       <- Graph_unipartite %>% as.data.frame %>% pull(Lenguage) # should be as.character
 ResponseNetwork %v% "Sensationalism" <- Graph_unipartite %>% as.data.frame %>% pull(Sensationalism)
 ResponseNetwork %v% "TotalError"     <- Graph_unipartite %>% as.data.frame %>% pull(TotalError)
-ResponseNetwork %v% "ISA"            <- Graph_unipartite %>% as.data.frame %>% pull(ISA)
 
 #Data exploration
 
 # Collinearity 
-psych::pairs.panels(Graph_unipartite %>% as.data.frame %>% select(ISA, N, Sensationalism, TotalError))
-
-# Isa and N are likely collinear:
-Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=log(ISA+1),y=log(N+1))) + geom_point() + theme_custom()
+psych::pairs.panels(Graph_unipartite %>% as.data.frame %>% select(N, Sensationalism, TotalError))
 
 # Check association between Lenguage and continous var
 Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=lon)) + geom_boxplot() + theme_custom()
@@ -645,7 +664,6 @@ Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=lat)) + geom_boxp
 Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=Sensationalism)) + geom_boxplot() + theme_custom()
 Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=TotalError)) + geom_boxplot() + theme_custom()
 Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=N)) + geom_boxplot() + theme_custom()
-Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=ISA)) + geom_boxplot() + theme_custom()
 
 # Model fit
 ergm0 <- ergm::ergm(ResponseNetwork ~ edges, estimate = "MLE")
@@ -653,12 +671,12 @@ ergm1 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout), estimate =
 ergm2 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism"), estimate = "MLE")
 ergm3 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError"), estimate = "MLE")
 ergm4 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N"), estimate = "MLE")
-ergm5 <- ergm::ergm(ResponseNetwork ~ edges + nodefactor("Lenguage") + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N"), estimate = "MLE")
-ergm6 <- ergm::ergm(ResponseNetwork ~ edges + nodematch("Lenguage", diff = F) + nodefactor("Lenguage") + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N"), estimate = "MLE")
+ergm5 <- ergm::ergm(ResponseNetwork ~ edges + nodematch("Lenguage", diff = FALSE) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N"), estimate = "MLE")
+#ergm6 <- ergm::ergm(ResponseNetwork ~ edges + nodematch("Lenguage", diff = F) + nodefactor("Lenguage") + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N"), estimate = "MLE")
 
-list(ergm0, ergm1, ergm2, ergm3, ergm4, ergm5, ergm6) %>% map_dbl(BIC) %>% plot
+list(ergm0, ergm1, ergm2, ergm3, ergm4, ergm5) %>% map_dbl(BIC) %>% plot
 
-ergm_BIC <- ergm6 ; rm(ergm0, ergm1, ergm2, ergm3, ergm4, ergm5, ergm6)
+ergm_BIC <- ergm5 ; rm(ergm0, ergm1, ergm2, ergm3, ergm4, ergm5)
 
 # Model validation
 

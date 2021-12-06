@@ -60,8 +60,8 @@ axis_labels_ergm1 <- c("Edges",
                        "Errors",
                        "Number of News Articles")
 
-title_sjPlot_m1    = "Drivers of sensationalism of news stories"
-title_sjPlot_m2    = "Drivers of presence of errors in news stories"
+title_sjPlot_m1    = "Drivers of sensationalism"
+title_sjPlot_m2    = "Drivers of errors [any error type]"
 title_sjPlot_m3    = "Drivers of country centrality in the network"
 title_ergm1        = "Drivers of country importance in the network"
 
@@ -96,13 +96,14 @@ theme_custom <- function(){
 
 }
 
-theme_map_custom <- theme(
-    axis.line=element_blank(),axis.text.x=element_blank(),
-    axis.text.y=element_blank(),axis.ticks=element_blank(),
-    axis.title.x=element_blank(),
-    axis.title.y=element_blank(),legend.position="none",
-    panel.background=element_rect(fill = "white", colour = "white"),
-    panel.border=element_blank(),panel.grid.major=element_blank(),
-    panel.grid.minor=element_blank(),
-    plot.background= element_rect(fill = "white", colour = "white"))
-
+theme_map_custom <- theme( 
+  axis.line=element_blank(),axis.text.x=element_blank(),
+  axis.text.y=element_blank(),axis.ticks=element_blank(),
+  axis.title.x=element_blank(),
+  axis.title.y=element_blank(),legend.position="none",
+  panel.background=element_rect(fill ="gray40", colour="gray40"),
+  panel.border=element_blank(),
+  panel.grid.major=element_blank(),
+  panel.grid.minor=element_blank(),
+  plot.background=element_rect(fill ="gray40", colour="gray40")
+)
