@@ -155,7 +155,6 @@ table(db_unique_news$TypeEvent)
 #############################
 
 # Loading country-level attributes
-
 CountryAttributes <- read.csv(file = "Data/CountryAttributes_Demography.csv", sep = '\t', dec = ',', header = TRUE, as.is = FALSE)
 
 # Summarizing country attributes from the Spider news database
@@ -199,39 +198,17 @@ country_attr <- country_attr %>% dplyr::left_join(CountryAttributes, by = c("Cou
                   lon, 
                   lat, 
                   ISA, #number of arachnologist in the country.
-                  Education_index = Education_Index_2019,  
-                  Internet_users  = Internet_users_2018,
-                  N_newspapers    = Number_newspapers_Mean1996.2005,
-                  Press_Freedom = Press_Freedom_Index,
-                  N_Spiders = N_Spiders_WSC,
+                  Education_index  = Education_Index_2019,  
+                  Internet_users   = Internet_users_2018,
+                  N_newspapers     = Number_newspapers_Mean1996.2005,
+                  Press_Freedom    = Press_Freedom_Index,
+                  N_Spiders        = N_Spiders,
                   N_Deadly_Spiders = N_Deadly)
                   
 rm(CountryAttributes) #clean
 
-#########################
-# At the ID_Event level #
-#########################
-
-sort(table(db$ID_Event), decreasing = TRUE)
-
-#Extract ID attributes for each ID event
-ID_attr <- db %>% filter(ID_Event == levels(ID_Event)[1]) %>%
-  arrange(Year_news) %>% droplevels() %>% extractID_attributes #first event
-
-#takes about 1 minutes::
-for(i in 2:nlevels(db$ID_Event)) 
-  ID_attr <- db %>% filter(ID_Event == levels(ID_Event)[i]) %>% arrange(Year_news) %>% droplevels() %>%
-  extractID_attributes %>% bind_rows(ID_attr) #all others
-
-ID_attr %<>% mutate_all(function(x) ifelse(is.infinite(x), NA, x)) #convert infinite to NA
-
-# All genus with less than 50 occurrence become "Others":
-ID_attr$Genus <- ifelse(ID_attr$Genus %in% names(which(table(ID_attr$Genus)>50)), ID_attr$Genus, "Others")
-
-#Replace missing data in temporal span (assuming it is 1)
-ID_attr$Temporal_span <- ifelse(is.na(ID_attr$Temporal_span) == TRUE, 1, ID_attr$Temporal_span)
-
-rm(i) #clean
+# Predict missing data
+country_attr[,9:12] <- BAT::fill(data.frame(country_attr[,9:12]))
 
 ###############################################################
 
@@ -455,14 +432,14 @@ rm(fit,R_m1) #clean
 
 # Figure 2 ----------------------------------------------------------------
 
-pdf(file = "Figures/Figure_2.pdf", width = 12, height =5)
-ggpubr::ggarrange(plot_model1,plot_model2,
-                  common.legend = FALSE,
-                  hjust = -4,
-                  align = "v",
-                  labels = c("A","B"),
-                  ncol=2)
-dev.off()
+# pdf(file = "Figures/Figure_2.pdf", width = 12, height =5)
+# ggpubr::ggarrange(plot_model1,plot_model2,
+#                   common.legend = FALSE,
+#                   hjust = -4,
+#                   align = "v",
+#                   labels = c("A","B"),
+#                   ncol=2)
+# dev.off()
 
 ###############################################################
 
@@ -537,9 +514,9 @@ SpatialLayout <- country_attr[1:79,] %>% dplyr::select(lon,lat) %>% as.matrix #g
 # Regression Models #
 ###################################
 
-db_m3_cat <- country_attr %>% dplyr::select(Degree, Country_search, Lenguage) 
+db_m3_cat <- country_attr %>% dplyr::select(Degree, Country_search, Lenguage) #Dependent variable + categorical
 db_m3_con <- country_attr %>% dplyr::select(N, ISA, Sensationalism, TotalError, Education_index,
-                                            Internet_users,N_newspapers, N_Spiders, N_Deadly_Spiders) 
+                                            Internet_users, N_newspapers, Press_Freedom, N_Spiders, N_Deadly_Spiders) #Continuous variables
 
 db_m3_con <- data.frame(db_m3_con)
 
@@ -560,6 +537,14 @@ psych::pairs.panels(db_m3_con)
 #Number of newspaper with N 
 #ISA and N
 
+# Check association between Lenguage and continous var
+Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=Internet_users)) + geom_boxplot() + theme_custom()
+Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=N_newspapers)) + geom_boxplot() + theme_custom()
+Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=Sensationalism)) + geom_boxplot() + theme_custom()
+Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=TotalError)) + geom_boxplot() + theme_custom()
+Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=Press_Freedom)) + geom_boxplot() + theme_custom()
+Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=N_Deadly_Spiders)) + geom_boxplot() + theme_custom()
+
 #Check balance of levels
 db_m3_cat$Lenguage %>% table
 
@@ -575,31 +560,12 @@ db_m3_noNA <- na.omit(db_m3)
 # Set reference level
 db_m3_noNA$Lenguage <- as.factor(db_m3_noNA$Lenguage)
 
+db_m3_noNA$Lenguage <- factor(db_m3_noNA$Lenguage, levels = c("Others", "English", "Arabic", "Russian", "Spanish"))
+
 # Fit the model -----------------------------------------------------------
 
-# # Set formula
-# formula_m3 <- as.formula("Degree ~ TotalError + Sensationalism + Internet_users + N_Spiders + (1|Lenguage)")
-# 
-# # Fit the model
-# m3 <- lme4::glmer(formula_m3, 
-#             data = db_m3_noNA, 
-#             family = poisson(link = "log"),
-#             control = glmerControl(optimizer="bobyqa"))
-# 
-# # Check model
-# performance::check_overdispersion(m3) #Overdispersed
-# 
-# # Switch to negative binomial
-# m3 <- lme4::glmer.nb(formula_m3, data = db_m3_noNA)
-# 
-# summary(m3)
-# performance::check_model(m3)
-# performance::r2(m3)
-# 
-# (plot_model3 <- sjPlot::plot_model(m3))
-
 # Set formula
-formula_m3 <- as.formula("Degree ~ Lenguage + Sensationalism + TotalError + Internet_users + N_Deadly_Spiders")
+formula_m3 <- as.formula("Degree ~ Lenguage + Sensationalism + TotalError + Internet_users + N_newspapers + Press_Freedom + N_Deadly_Spiders")
 
 # Fit the model
 m3 <- glm(formula_m3, family = "poisson", data = db_m3_noNA)
@@ -624,8 +590,8 @@ performance::r2(m3)
                                    vline.color = "grey80",
                                    color = "grey5",
                                    axis.title = xlab_sjPlot_m3, 
-                                   #axis.labels = rev(axis_labels_sjPlot_m3), 
-                                   show.values = TRUE, 
+                                   axis.labels = axis_labels_sjPlot_m3, 
+                                   show.values = FALSE, 
                                    value.offset = .3, 
                                    se = TRUE, 
                                    show.p = FALSE) + theme_custom())
@@ -648,35 +614,27 @@ colnames(AdjMatrix) <- rownames(AdjMatrix) <- Graph_unipartite %>% activate(node
 ResponseNetwork <- AdjMatrix %>% as.matrix %>% network::network(directed = FALSE)
 
 #Adding node-level attributes
-ResponseNetwork %v% "N"              <- Graph_unipartite %>% as.data.frame %>% dplyr::mutate(N = log(N+1)) %>% pull(N)
-ResponseNetwork %v% "Lenguage"       <- Graph_unipartite %>% as.data.frame %>% pull(Lenguage) # should be as.character
-ResponseNetwork %v% "Sensationalism" <- Graph_unipartite %>% as.data.frame %>% pull(Sensationalism)
-ResponseNetwork %v% "TotalError"     <- Graph_unipartite %>% as.data.frame %>% pull(TotalError)
-
-#Data exploration
-
-# Collinearity 
-psych::pairs.panels(Graph_unipartite %>% as.data.frame %>% select(N, Sensationalism, TotalError))
-
-# Check association between Lenguage and continous var
-Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=lon)) + geom_boxplot() + theme_custom()
-Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=lat)) + geom_boxplot() + theme_custom()
-Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=Sensationalism)) + geom_boxplot() + theme_custom()
-Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=TotalError)) + geom_boxplot() + theme_custom()
-Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=N)) + geom_boxplot() + theme_custom()
+ResponseNetwork %v% "Lenguage"         <- as.character(db_m3_noNA[1:79,]$Lenguage)
+ResponseNetwork %v% "Sensationalism"   <- db_m3_noNA[1:79,]$Sensationalism
+ResponseNetwork %v% "TotalError"       <- db_m3_noNA[1:79,]$TotalError
+ResponseNetwork %v% "Internet"         <- db_m3_noNA[1:79,]$Internet_users
+ResponseNetwork %v% "Freedom"          <- db_m3_noNA[1:79,]$TotalError
+ResponseNetwork %v% "N_Deadly_Spiders" <- db_m3_noNA[1:79,]$N_Deadly_Spiders
 
 # Model fit
 ergm0 <- ergm::ergm(ResponseNetwork ~ edges, estimate = "MLE")
 ergm1 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout), estimate = "MLE")
 ergm2 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism"), estimate = "MLE")
 ergm3 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError"), estimate = "MLE")
-ergm4 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N"), estimate = "MLE")
-ergm5 <- ergm::ergm(ResponseNetwork ~ edges + nodematch("Lenguage", diff = FALSE) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N"), estimate = "MLE")
-#ergm6 <- ergm::ergm(ResponseNetwork ~ edges + nodematch("Lenguage", diff = F) + nodefactor("Lenguage") + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N"), estimate = "MLE")
+ergm4 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders"), estimate = "MLE")
+ergm5 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodefactor("Lenguage"), estimate = "MLE")
+ergm6 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodefactor("Lenguage") + nodecov("Internet"), estimate = "MLE")
+ergm7 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodefactor("Lenguage") + nodecov("Internet") + nodecov("Freedom"), estimate = "MLE")
+ergm8 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodefactor("Lenguage") + nodematch("Lenguage") + nodecov("Internet"), estimate = "MLE")
 
-list(ergm0, ergm1, ergm2, ergm3, ergm4, ergm5) %>% map_dbl(BIC) %>% plot
+list(ergm0, ergm1, ergm2, ergm3, ergm4, ergm5, ergm6, ergm7, ergm8) %>% map_dbl(BIC) %>% plot
 
-ergm_BIC <- ergm5 ; rm(ergm0, ergm1, ergm2, ergm3, ergm4, ergm5)
+ergm_BIC <- ergm8
 
 # Model validation
 
@@ -715,14 +673,63 @@ EstimateDF %<>% # Bind them together
 
 EstimateDF %>% head
 
-EstimateDF$Variable <- axis_labels_ergm1
+EstimateDF$Variable <- c("Edges", 
+                         "Coordinates", 
+                         "Sensationalistic news [Proportion]", 
+                         "News with errors [Proportion]",
+                         "N° of deadly spiders",
+                         "Lenguage [English]",
+                         "Lenguage [Others]",
+                         "Lenguage [Russian]",
+                         "Lenguage [Spanish]",
+                         "Language [Node match]",
+                         "Internet users")
 
 (plot_ergm1 <- EstimateDF %>% ggplot2::ggplot(aes(Variable, Estimate)) +
   geom_hline(lty = 1, col = "grey60", yintercept = 0) +
   geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0) +
-  labs(y     = xlab_ergm1_ergm2, 
+  labs(y     = xlab_ergm1, 
        title = title_ergm1) +
       geom_point() + theme_custom() + theme(axis.title.y=element_blank()) + coord_flip())
+
+# Figure 2 ----------------------------------------------------------------
+
+pdf(file = "Figures/Figure_2.pdf", width = 14, height =10)
+ggpubr::ggarrange(plot_model1,plot_model2,plot_model3,plot_ergm1,
+                  common.legend = FALSE,
+                  hjust = -4,
+                  align = "hv",
+                  labels = c("A", "B", "C", "D"),
+                  ncol=2, nrow=2)
+dev.off()
+
+###############################################################
+
+#########################
+# At the ID_Event level #
+#########################
+
+sort(table(db$ID_Event), decreasing = TRUE)
+
+#Extract ID attributes for each ID event
+ID_attr <- db %>% filter(ID_Event == levels(ID_Event)[1]) %>%
+  arrange(Year_news) %>% droplevels() %>% extractID_attributes #first event
+
+#takes about 1 minutes::
+for(i in 2:nlevels(db$ID_Event)) 
+  ID_attr <- db %>% filter(ID_Event == levels(ID_Event)[i]) %>% arrange(Year_news) %>% droplevels() %>%
+  extractID_attributes %>% bind_rows(ID_attr) #all others
+
+ID_attr %<>% mutate_all(function(x) ifelse(is.infinite(x), NA, x)) #convert infinite to NA
+
+# All genus with less than 50 occurrence become "Others":
+ID_attr$Genus <- ifelse(ID_attr$Genus %in% names(which(table(ID_attr$Genus)>50)), ID_attr$Genus, "Others")
+
+#Replace missing data in temporal span (assuming it is 1)
+ID_attr$Temporal_span <- ifelse(is.na(ID_attr$Temporal_span) == TRUE, 1, ID_attr$Temporal_span)
+
+rm(i) #clean
+
 
 # Analysing ID_Event-level network properties -----------------------------
 
@@ -878,919 +885,4 @@ EstimateDF2 %>% ggplot2::ggplot(aes(Variable, Estimate)) +
   geom_hline(lty = 1, col = "grey60", yintercept = 0) +
   geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2) +
   geom_point() + theme_custom() + coord_flip()
-
-#########################################
-
-# Country search ----------------------------------------------------------
-
-# Countries of the Search
-Country <- data.frame(table(db$Country_search))
-colnames(Country) <- c("Country", "N_news")
-
-# Adding the coordinate of each country
-Country <- unique(dplyr::left_join(x  = Country, 
-                                   y  = data.frame(Country = db$Country_search, long = db$lon3, lat = db$lat3), 
-                                   by ="Country", copy = FALSE)) 
-
-##Calculating country connections
-all_pairs <- data.frame(long1 = NA, 
-                        long2 = NA, 
-                        lat1 = NA, 
-                        lat2 = NA, 
-                        lwd = NA, 
-                        countrySearch = NA, 
-                        country = NA) 
-
-for (i in 1:nlevels(db$Country_search)) {
-  
-  #select first country
-  country_i <- db[db$Country_search == as.character(unique(db$Country_search)[i]),]
-  
-  #remove potential NAs
-  country_i <- country_i[1:table(db$Country_search)[i],]
-  
-  country_i$Country_event <- droplevels(country_i$Country_event)
-  
-  country_i <- country_i[country_i$Country_event != as.character(unique(db$Country_search)[i]), ]
-  
-  country_i <- subset(country_i, !is.na(lon2) & !is.na(lat2))
-  
-  
-  if(nrow(country_i) < 1){
-    NULL
-  }
-  
-  else {
-    len <- length(table(droplevels(country_i$Country_event)))
-    
-    all_pairs2 <- data.frame( long1 = rep(country_i$lon3[1], len),
-                              long2 = c(unique(country_i$lon2)),
-                              lat1 = rep(country_i$lat3[1], len),
-                              lat2 = c(unique(country_i$lat2)),
-                              lwd = as.numeric(table(droplevels(country_i$Country_event))),
-                              countrySearch = rep(as.character(unique(db$Country_search)[i]),len),
-                              country= names(table(droplevels(country_i$Country_event)))
-    ) 
-    
-    all_pairs  <- rbind(all_pairs,all_pairs2)
-    
-  }
-}
-
-all_pairs <- na.omit(all_pairs)
-
-# Calculating measures of Centrality --------------------------------------
-
-# https://medium.com/@615162020004/social-network-analysis-with-r-centrality-measure-86d7fa273574
-
-Net_2 <- igraph::graph.data.frame(Network_matrix_igraph, directed=TRUE)
-plot(Net_2,edge.arrow.size=0.5,edge.arrow.mode = "-")
-
-# Degree Centrality
-
-# Definition: Degree centrality assigns an importance score based purely on the number of links held by each node.
-# What it tells us: How many direct, ‘one hop’ connections each node has to other nodes within the network.
-# When to use it: For finding very connected individuals, popular individuals, individuals who are likely to hold most information or individuals who can quickly connect with the wider network.
-
-Centrality_Degree <- data.frame(igraph::degree(Net_2, mode = "out"))
-Centrality_Degree <- data.frame(country = as.character(rownames(Centrality_Degree)),
-                                n = Centrality_Degree[,1]) %>% arrange(country) 
-
-# Betweenness Centrality
-
-# Definition: Betweenness centrality measures the number of times a node lies on the shortest path between other nodes.
-# What it tells us: This measure shows which nodes act as ‘bridges’ between nodes in a network. It does this by identifying all the shortest paths and then counting how many times each node falls on one.
-# When to use it: For finding the individuals who influence the flow around a system.
-
-Centrality_Betweeness <- data.frame(igraph::betweenness(Net_2))
-Centrality_Betweeness <- data.frame(country = as.character(rownames(Centrality_Betweeness)),
-                                    n = Centrality_Betweeness[,1]) %>% arrange(country) 
-
-# Closeness Centrality
-
-# Definition: This measure scores each node based on their ‘closeness’ to all other nodes within the network.
-# What it tells us: This measure calculates the shortest paths between all nodes, then assigns each node a score based on its sum of shortest paths.
-# When to use it: For finding the individuals who are best placed to influence the entire network most quickly.
-
-Centrality_Closeness <- data.frame(igraph::closeness(Net_2))
-Centrality_Closeness <- data.frame(country = as.character(rownames(Centrality_Closeness)),
-                                   n = Centrality_Closeness[,1]) %>% arrange(country) 
-
-# Storing & cleaning
-
-Centrality <- data.frame(country     = Centrality_Degree$country,
-                         Cdegree     = Centrality_Degree$n,
-                         Cbetween    = Centrality_Betweeness$n,
-                         Cclosenness = Centrality_Closeness$n)
-
-rm(Centrality_Degree,Centrality_Betweeness,Centrality_Closeness,Net_2)
-
-# Creating a connection plot ----------------------------------------------
-
-# Countries of the Search
-Country <- data.frame(table(db$Country_search),Centrality[,2:4])
-colnames(Country) <- c("Country", "N_news","Cdegree","Cbetween","Cclosenness")
-
-# Adding the coordinate of each country
-Country <- unique(dplyr::left_join(x = Country, 
-                                   y = data.frame(Country = db$Country_search, long = db$lon3, lat = db$lat3), 
-                                   by = "Country", copy = FALSE)) 
-
-
-##Calculating country connections
-all_pairs <- data.frame(long1 = NA, 
-                        long2 = NA, 
-                        lat1 = NA, 
-                        lat2 = NA, 
-                        lwd = NA, 
-                        countrySearch = NA, 
-                        country = NA) 
-
-for (i in 1:nlevels(db$Country_search)) {
-  
-  #select first country
-  country_i <- db[db$Country_search == as.character(unique(db$Country_search)[i]),]
-  
-  #remove potential NAs
-  country_i <- country_i[1:table(db$Country_search)[i],]
-  
-  country_i$Country_event <- droplevels(country_i$Country_event)
-  
-  country_i <- country_i[country_i$Country_event != as.character(unique(db$Country_search)[i]), ]
-  
-  country_i <- subset(country_i, !is.na(lon2) & !is.na(lat2))
-  
-  if(nrow(country_i) < 1){
-    NULL
-  }
-  
-  else {
-    len <- length(table(droplevels(country_i$Country_event)))
-    
-    all_pairs2 <- data.frame( long1 = rep(country_i$lon3[1], len),
-                              long2 = c(unique(country_i$lon2)),
-                              lat1 = rep(country_i$lat3[1], len),
-                              lat2 = c(unique(country_i$lat2)),
-                              lwd = as.numeric(table(droplevels(country_i$Country_event))),
-                              countrySearch = rep(as.character(unique(db$Country_search)[i]),len),
-                              country= names(table(droplevels(country_i$Country_event)))
-    ) 
-    
-    all_pairs  <- rbind(all_pairs,all_pairs2)
-    
-  }
-}
-
-all_pairs <- na.omit(all_pairs)
-
-# Countries with no news --------------------------------------------------
-
-Botwsana   <- c(23.90,  -21.60)
-Iceland    <- c(-19.22,  64.82)
-Montenegro <- c(19.17,   42.83)
-
-NoNews <- rbind(Botwsana,
-                Iceland,
-                Montenegro) %>% 
-  as.data.frame()
-
-colnames(NoNews) <- c("long","lat")
-
-# Making the map ----------------------------------------------------------
-
-# https://datascience.blog.wzb.eu/2018/05/31/three-ways-of-visualizing-a-graph-on-a-map/
-
-# https://www.r-graph-gallery.com/how-to-draw-connecting-routes-on-map-with-r-and-great-circles.html
-
-(map2 <- ggplot() +
-   geom_map(map = world, data = world,
-            aes(long, lat, map_id = region), 
-            color = "gray50", fill = "grey70", size = 0.3) +
-   
-   geom_curve(aes(x = jitter(long1,0.0001), 
-                  y = jitter(lat1,0.0001), 
-                  xend = jitter(long2, 0.0001), 
-                  yend = jitter(lat2, 0.0001),    # draw edges as arcs
-                  size = lwd),
-              data = all_pairs, curvature = 0.34,
-              alpha = 0.2,  color = "orange") +
-   
-   geom_point(data = Country, 
-              aes(x = long, y = lat),
-              alpha = 0.7, colour = "black",fill="blue",
-              size = range01(sqrt(Country$N_news))*13,
-              shape = 21,stroke = 0.8)+
-   
-   geom_point(data = NoNews, 
-              aes(x = long, y = lat),
-              alpha = 0.7, colour = "black",fill="red",
-              size = 2,
-              shape = 21,stroke = 0.8)+
-   
-   scale_size_continuous("Number of connections:", breaks=c(1,5,10,15))+
-   
-   theme_map()+
-   # theme(legend.position = "bottom",
-   #       legend.text = element_text(size = 12),
-   #       legend.title = element_text(size = 12),
-   theme(
-     axis.line=element_blank(),axis.text.x=element_blank(),
-     axis.text.y=element_blank(),axis.ticks=element_blank(),
-     axis.title.x=element_blank(),
-     axis.title.y=element_blank(),legend.position="none",
-     panel.background=element_rect(fill = "black", colour = "black"),
-     panel.border=element_blank(),panel.grid.major=element_blank(),
-     panel.grid.minor=element_blank(),
-     plot.background= element_rect(fill = "black", colour = "black"))
- 
-)
-
-
-pdf("Figure_conn.pdf", width = 14, height = 8)
-map2
-dev.off()
-
-
-
-# Wordcloud ---------------------------------------------------------------
-
-library(tidytext)
-library(R.utils)
-library(wordcloud)
-
-db_english <- db[db$Lenguage == "English",]
-
-# A list of boring and non-useful words, bundled with `tidytext`
-data(stop_words)
-Title_sensationalistic <- db_english[db_english$Sensationalism == 1,] %>%
-  mutate(title = as.character(Title)) %>%
-  unnest_tokens(output = title_word,
-                input = Title) %>%
-  anti_join(stop_words, by = c("title_word" = "word")) %>%
-  count(title_word, sort = TRUE) 
-
-Title_sensationalistic[2:60,] %>% with(wordcloud(words = title_word, 
-                                                 freq = n, 
-                                                 max.words = 200,
-                                                 scale=c(4,.2),
-                                                 random.color=TRUE, color = c("orange","orange","darkorange","black","black")))
-
-
-Title_non <- db_english[db_english$Sensationalism == 0,] %>%
-  mutate(title = as.character(Title)) %>%
-  unnest_tokens(output = title_word,
-                input = Title) %>%
-  anti_join(stop_words, by = c("title_word" = "word")) %>%
-  count(title_word, sort = TRUE) 
-
-Title_non[2:60,] %>% with(wordcloud(words = title_word, 
-                                    freq = n, 
-                                    max.words = 200,
-                                    scale=c(4,.2),
-                                    random.color=TRUE, color = c("aquamarine3","aquamarine4","darkblue","black")))
-
-
-
-
-
-
-## https://cedricscherer.netlify.app/2019/05/17/the-evolution-of-a-ggplot-ep.-1/
-
-## load fonts
-font_add_google("Poppins", "Poppins")
-font_add_google("Roboto Mono", "Roboto Mono")
-showtext_auto()
-
-
-
-
-ggplot(db, aes(x =TotalError , y =Country_search)) +
-  stat_summary(fun = mean, geom = "point", size = 5) +
-  geom_jitter(size = 2, alpha = 0.25, width = 0.2) +
-  theme_light(base_size = 15) +
-  labs(caption = "Data: UNESCO Institute for Statistics")+
-  
-  
-  geom_curve(
-    # data = arrows, aes(x = x1, xend = x2,
-    #                    y = y1, yend = y2),
-    arrow = arrow(length = unit(0.08, "inch")), size = 0.5,
-    color = "gray20", curvature = -0.3#
-  ) +
-  
-  theme(
-    legend.position = "none",
-    axis.title = element_text(size = 12),
-    axis.text.x = element_text(size = 10),
-    plot.caption = element_text(size = 11, color = "gray50"),
-    panel.grid = element_blank()
-  )
-
-
-
-
-
-scale_fill_manual(labels=c("  Latrodectus tredecimguttatus", "  Loxosceles rufescens"),values=c("black", "#E69F00"))+
-  scale_x_continuous(breaks = c(2010:2019), labels = as.character(2010:2019))+ 
-  labs(title="Annual distribution of media reports",x=NULL, y = "Density")+
-  
-  #annotate("text",label="Fred Vargas' book\n'Quand sort la recluse'",hjust = 0,x=2015,y=0.4,size=4)+
-  #annotate("segment", x = 2017, xend = 2017, y = 0.25, yend = 0.35, colour = "grey20", size=0.8)+
-  theme_classic()+
-  theme(legend.position = c(0.2, 0.7),
-        legend.text = element_text(size=10,face = "italic"),
-        legend.title = element_text(size=0))
-
-
-
-
-
-
-
-
-table(db_unique_ID$Species) # 5 Others; 22 Latrodectus tredecimguttatus;  71 Loxosceles rufescens 
-table(db_unique_ID$Bite)  # 69 bites
-table(db_unique_ID$Death) # 3 deaths
-
-Death_db=db_unique_ID[db_unique_ID$Death== "Yes",]
-
-# merging poorly represented species in the category "others"
-
-db$Species2 = db$Species
-levels(db$Species2) = c("Others","Others","Latrodectus tredecimguttatus","Loxosceles rufescens","Others")
-
-## Temporal trends
-
-db_ll <- db[db$Species == "Loxosceles rufescens" | db$Species == "Latrodectus tredecimguttatus",]
-db_ll$Species= droplevels(db_ll$Species)
-
-p1 = ggplot(db_ll[db_ll$yr<2020,], aes(x=yr,fill=Species))+
-  geom_density(alpha=0.6,adjust=1.5)+
-  scale_fill_manual(labels=c("  Latrodectus tredecimguttatus", "  Loxosceles rufescens"),values=c("black", "#E69F00"))+
-  scale_x_continuous(breaks = c(2010:2019), labels = as.character(2010:2019))+ 
-  labs(title="Annual distribution of media reports",x=NULL, y = "Density")+
-  
-  #annotate("text",label="Fred Vargas' book\n'Quand sort la recluse'",hjust = 0,x=2015,y=0.4,size=4)+
-  #annotate("segment", x = 2017, xend = 2017, y = 0.25, yend = 0.35, colour = "grey20", size=0.8)+
-  theme_classic()+
-  theme(legend.position = c(0.2, 0.7),
-        legend.text = element_text(size=10,face = "italic"),
-        legend.title = element_text(size=0))
-
-p2 = ggplot(db_ll, aes(x=m, fill=Species))+
-  geom_density(alpha=0.6)+
-  scale_fill_manual(labels=c("  Latrodectus tredecimguttatus", "  Loxosceles rufescens"),values=c("black", "#E69F00"))+
-  scale_x_continuous(breaks = 1:12, labels = array(month.abb))+ 
-  labs(title="Seasonal distribution of media reports",x=NULL, y = "Density")+
-  theme_classic()+
-  theme(legend.position = "none")
-
-pdf("/Users/stefanomammola/Desktop/Figure_temporal.pdf", width = 14, height = 5)
-
-grid.arrange(p1,p2,ncol=2)
-
-dev.off()
-
-###### CONTENT OF REPORTS
-
-CONT1= data.frame(table(db_unique_ID$Species,db_unique_ID$Bite))
-DEATH1=data.frame(table(db_unique_ID$Species,db_unique_ID$Death))
-
-CONT1[6,3] <- 59
-levels(CONT1$Var2) = c("Encounter","Bite")
-
-DEATH1=data.frame(Var1=DEATH1[1:3,1],Var2=rep("Deadly bite",3),Freq=c(0,0,3))
-
-CONT1 = rbind(CONT1,DEATH1)
-
-c1 = ggplot(CONT1, aes(x=Var1,y=Freq,fill=Var2)) +
-  geom_bar(stat="identity",color="black",position=position_dodge(), alpha=1)+
-  geom_text(aes(label=Freq), vjust=-1, color="black",
-            position = position_dodge(0.9), size=3.5)+
-  
-  scale_fill_manual("",labels=c("Encounter", "Bite", "Deadly bite"),values=c("grey20", "deepskyblue4","orange"))+
-  
-  labs(title="Type of event",subtitle =  "[Only unique event are counted]",x=NULL, y = "Frequency")+
-  theme_classic()+
-  theme(legend.position = c(0.15, 0.5),
-        legend.text = element_text(size=10,face = "plain"),
-        legend.title = element_text(size=12,face="bold"), 
-        axis.text.x = element_text(size=12,face = c("plain","italic","italic")))
-
-
-c1
-
-
-CONT2= data.frame(table(db$Species,db$Figure_species))
-
-c2 = ggplot(CONT2, aes(x=Var1,y=Freq,fill=Var2)) +
-  geom_bar(stat="identity",color="black",position=position_dodge(), alpha=1)+
-  geom_text(aes(label=Freq), vjust=-1, color="black",
-            position = position_dodge(0.9), size=3.5)+
-  
-  scale_fill_manual("",labels=c("Without", "With"),values=c("grey20", "deepskyblue3"))+
-  
-  labs(title="Photography of the species",x=NULL, y = "Frequency")+
-  theme_classic()+
-  theme(legend.position = c(0.15, 0.5),
-        legend.text = element_text(size=10,face = "plain"),
-        legend.title = element_text(size=12,face="bold"), 
-        axis.text.x = element_text(size=12,face = c("plain","italic","italic")))
-
-c2
-
-CONT3= data.frame(table(db$Species2,db$Figure_bite))
-
-c3 = ggplot(CONT3, aes(x=Var1,y=Freq,fill=Var2)) +
-  geom_bar(stat="identity",color="black",position=position_dodge(), alpha=1)+
-  geom_text(aes(label=Freq), vjust=-1, color="black",
-            position = position_dodge(0.9), size=3.5)+
-  
-  scale_fill_manual("",labels=c("Without", "With"),values=c("grey20", "deepskyblue3"))+
-  
-  labs(title="Photographs of the bite",x=NULL, y = "Frequency")+
-  theme_classic()+
-  theme(legend.position = c(0.15, 0.5),
-        legend.text = element_text(size=10,face = "plain"),
-        legend.title = element_text(size=12,face="bold"), 
-        axis.text.x = element_text(size=12,face = c("plain","italic","italic")))
-
-c3
-
-CONT4= data.frame(table(db$Species2,db$Expert))
-
-c4 = ggplot(CONT4, aes(x=Var1,y=Freq,fill=Var2)) +
-  geom_bar(stat="identity",color="black",position=position_dodge(), alpha=1)+
-  geom_text(aes(label=Freq), vjust=-1, color="black",
-            position = position_dodge(0.9), size=3.5)+
-  
-  scale_fill_manual("",labels=c("No", "Yes"),values=c("grey20", "deepskyblue3"))+
-  
-  labs(title="Expert consulted",x=NULL, y = "Frequency")+
-  theme_classic()+
-  theme(legend.position = c(0.15, 0.5),
-        legend.text = element_text(size=10,face = "plain"),
-        legend.title = element_text(size=12,face="bold"), 
-        axis.text.x = element_text(size=12,face = c("plain","italic","italic")))
-
-c4
-
-CONT5= data.frame(table(db$Species2,db$Sensationalism_consensus))
-
-c5 = ggplot(CONT5, aes(x=Var1,y=Freq,fill=Var2)) +
-  geom_bar(stat="identity",color="black",position=position_dodge(), alpha=1)+
-  geom_text(aes(label=Freq), vjust=-1, color="black",
-            position = position_dodge(0.9), size=3.5)+
-  
-  scale_fill_manual("",labels=c("No", "Yes"),values=c("grey20", "deepskyblue3"))+
-  
-  labs(title="Sensationalistic media report",x=NULL, y = "Frequency")+
-  theme_classic()+
-  theme(legend.position = c(0.15, 0.5),
-        legend.text = element_text(size=10,face = "plain"),
-        legend.title = element_text(size=12,face="bold"), 
-        axis.text.x = element_text(size=12,face = c("plain","italic","italic")))
-
-c5
-str(db)
-
-## Facebook share
-c6 = ggplot(data=db, aes(y=log(Share_FB+1), x=Species2))+
-  labs(title="Share on social media", subtitle = "[Expressed as the number of shares on Facebook; Nanni et al., 2020]",x=NULL, y = "N° of shares [logarithm]")+
-  geom_boxplot(fill=c("darkseagreen2", "grey60", "#E69F00"),alpha=0.8)+ 
-  geom_jitter(alpha=0.6,col="grey20",shape=16, position=position_jitter(0.2))+
-  theme_classic()+
-  theme(axis.text.x = element_text(size=12,face = c("plain","italic","italic")))
-
-c6
-
-pdf("/Users/stefanomammola/Desktop/Fiugre_content.pdf", width = 21, height = 15.5)
-
-grid.arrange(c1,c6,c2,c3,c4,c5, ncol=2)
-
-dev.off()
-
-######## QUALITY OF PAPERS
-
-db$Species3 = db$Species2
-levels(db$Species3) = c("Others" , "L. tredecimguttatus", "L. rufescens")    
-
-BAR4= data.frame(table(db$Species3,db$Error_figures))
-
-e2 = ggplot(BAR4, aes(x=Var1,y=Freq,fill=Var2)) +
-  geom_bar(stat="identity",color="black",position=position_dodge(), alpha=1)+
-  geom_text(aes(label=Freq), vjust=-1, color="black",
-            position = position_dodge(0.9), size=3.5)+
-  
-  scale_fill_manual("",labels=c("No", "Yes"),values=c("grey20", "deepskyblue3"))+
-  labs(title="Error in photographs", subtitle =  "[i.e., wrong species depicted]",x=NULL, y = "Frequency")+
-  theme_classic()+
-  theme(legend.position = c(0.15, 0.8),
-        legend.text = element_text(size=10,face = "italic"),
-        legend.title = element_text(size=12,face="bold"), 
-        axis.text.x = element_text(size=12,face = c("plain","italic","italic")))
-
-e2
-
-BAR5= data.frame(table(db$Species3,db$Taxonomic_error))
-
-e3 = ggplot(BAR5, aes(x=Var1,y=Freq,fill=Var2)) +
-  geom_bar(stat="identity",color="black",position=position_dodge(), alpha=1)+
-  geom_text(aes(label=Freq), vjust=-1, color="black",
-            position = position_dodge(0.9), size=3.5)+
-  scale_fill_manual(labels=c("No", "Yes"),values=c("grey20", "deepskyblue3"))+
-  labs(title="Error related to taxonomy", subtitle =  "[e.g., '... a spider is an insect...' ]",x=NULL, y = "Frequency")+
-  theme_classic()+
-  theme(legend.position = "none",
-        axis.text.x = element_text(size=12,face = c("plain","italic","italic")))
-
-e3
-
-BAR6= data.frame(table(db$Species3,db$Venom_error))
-
-e4 = ggplot(BAR6, aes(x=Var1,y=Freq,fill=Var2)) +
-  geom_bar(stat="identity",color="black",position=position_dodge(), alpha=1)+
-  geom_text(aes(label=Freq), vjust=-1, color="black",
-            position = position_dodge(0.9), size=3.5)+
-  
-  scale_fill_manual(labels=c("No", "Yes"),values=c("grey20", "deepskyblue3"))+
-  labs(title="Error related to venom", subtitle =  "[e.g., '... the spiders injected a venom sac...' ]",x=NULL, y = "Frequency")+
-  theme_classic()+
-  theme(legend.position = "none",
-        axis.text.x = element_text(size=12,face = c("plain","italic","italic")))
-
-e4
-
-
-BAR7= data.frame(table(db$Species3,db$Sting_error))
-
-e5 = ggplot(BAR7, aes(x=Var1,y=Freq,fill=Var2)) +
-  geom_bar(stat="identity",color="black",position=position_dodge(), alpha=1)+
-  geom_text(aes(label=Freq), vjust=-1, color="black",
-            position = position_dodge(0.9), size=3.5)+
-  ylim(0,140)+
-  
-  scale_fill_manual(labels=c("No", "Yes"),values=c("grey20", "deepskyblue3"))+
-  labs(title="Error related to spider anatomy", subtitle = "[e.g., '... spiders sting ...' ]",x=NULL, y = "Frequency")+
-  theme_classic()+
-  theme(legend.position = "none",
-        axis.text.x = element_text(size=12,face = c("plain","italic","italic")))
-
-e5
-
-pdf("/Users/stefanomammola/Desktop/Fiugre_errors.pdf", width = 19, height = 10)
-
-lay <- rbind(c(1,1,2,3),
-             c(1,1,4,5))
-grid.arrange(e1,e2,e3,e4,e5, layout_matrix = lay)
-
-dev.off()
-
-############## SHARE ON SOCIAL MEDIA
-
-dotchart(db$Share_FB)
-
-#Zero inflatio
-sum(db_ll$Share_FB==0)/nrow(db)*100
-
-db_glm=db_ll[db_ll$Share_FB<15000,]
-db_glm=db_glm[db_glm$yr<2020,]
-
-db_glm$yr = as.numeric(db_glm$yr)
-db_glm$ID_event = as.factor(db_glm$ID_event)
-
-ggplot(data=db_glm, aes(y=Share_FB, x=Sensationalism_consensus))+
-  labs(x="Sensationalistic new", y = "Shares on Facebook")+
-  geom_boxplot(fill=c("grey20", "deepskyblue3"))+theme_classic()
-
-ggplot(data=db_glm, aes(y=Share_FB, x=Species2))+
-  labs(x="Species considered in the new", y = "Shares on Facebook")+
-  geom_boxplot(fill=c("grey50", "#E69F00"))+theme_classic()
-
-ggplot(data=db_glm, aes(y=Share_FB, x=Figure_species))+
-  labs(x="News with a figure of the species", y = "Shares on Facebook")+
-  geom_boxplot(fill=c("grey20", "deepskyblue3"))+theme_classic()
-
-ggplot(data=db_glm, aes(y=Share_FB, x=Bite))+
-  labs(x="News with a figure of the bite", y = "Shares on Facebook")+
-  geom_boxplot(fill=c("grey20", "deepskyblue3"))+theme_classic()
-
-ggplot(data=db_glm, aes(y=Share_FB, x=Expert))+
-  labs(x="News when an expert was contacted", y = "Shares on Facebook")+
-  geom_boxplot(fill=c("grey20", "deepskyblue3"))+theme_classic()
-
-ggplot(data=db_glm, aes(y=Share_FB, x=Circulation))+
-  labs(x="Journal' circulation", y = "Shares on Facebook")+
-  geom_boxplot()+theme_classic()
-
-ggplot(data=db_glm[db_glm$yr<2020,], aes(y=Share_FB, x=as.factor(as.character(yr))))+
-  labs(x=NULL, y = "Shares on Facebook")+
-  geom_point()+theme_classic()
-
-
-## Regression model Poisson
-
-M0 <- glmmadmb(Share_FB ~ Circulation + Bite + Sensationalism_consensus + Species2 + Figure_species + Figure_bite + Expert + (1|Newspaper), data=db_glm,family="poisson")
-
-summary(M0)
-
-overdisp_fun(M0)
-
-## Regression model Negative binomial
-
-M0 <- glmmadmb(Share_FB ~ Bite + Circulation + yr + m + I(m^2) + Sensationalism_consensus + Species2 + Figure_species + Figure_bite + Expert + (1|Newspaper) + (1|ID_event), data=db_glm, family="nbinom")
-
-summary(M0)
-
-M1 <- glmmadmb(Share_FB ~  Bite +  Circulation + yr +Sensationalism_consensus + Species2 + Figure_species + Figure_bite + Expert + (1|Newspaper)+ (1|ID_event), data=db_glm, family="nbinom")
-
-summary(M1)
-
-M2 <- glmmadmb(Share_FB ~  Circulation + yr + Sensationalism_consensus + Species2 + Figure_species + Figure_bite + Expert + (1|Newspaper)+ (1|ID_event), data=db_glm[db_glm$yr<2020,], family="nbinom")
-
-summary(M2)
-
-M3 <- glmmadmb(Share_FB ~ Circulation + yr + Sensationalism_consensus + Figure_species + Figure_bite + Expert + (1|Newspaper)+ (1|ID_event), data=db_glm[db_glm$yr<2020,], family="nbinom")
-
-summary(M3)
-
-M4 <- glmmadmb(Share_FB ~ Circulation + yr + Sensationalism_consensus + Figure_bite + Expert + (1|Newspaper) + (1|ID_event), data=db_glm[db_glm$yr<2020,], family="nbinom")
-
-summary(M4)
-
-M5 <- glmmadmb(Share_FB ~ Circulation + yr + Sensationalism_consensus + Expert + (1|Newspaper)+ (1|ID_event), data=db_glm, family="nbinom")
-
-summary(M5)
-
-M6 <- glmmadmb(Share_FB ~ Circulation + yr + Sensationalism_consensus + (1|Newspaper)+ (1|ID_event), data=db_glm[db_glm$yr<2020,], family="nbinom")
-
-summary(M6)
-
-M7 <- glmmadmb(Share_FB ~ yr + Sensationalism_consensus + (1|Newspaper)+ (1|ID_event), data=db_glm[db_glm$yr<2020,], family="nbinom")
-
-summary(M7)
-
-
-plot(M7)
-
-E7 = resid(M7, type="response")
-boxplot(E7 ~ db_glm[db_glm$yr<2020,]$ID_event) 
-boxplot(E7 ~ db_glm[db_glm$yr<2020,]$Newspaper) 
-plot(E7 ~ db_glm[db_glm$yr<2020,]$yr) 
-boxplot(E7 ~ db_glm[db_glm$yr<2020,]$Sensationalism_consensus) 
-
-
-VISREG=visreg(M7,"Sensationalistic", gg=TRUE,
-              line=list(col="deepskyblue3",size=1.5),
-              fill=list(fill="grey70",alpha=0.6),
-              points=list(size=2,col="grey25", pch=16,alpha=0.6)) +  
-  labs(x="Sensationalistic new", y = "Residuals (Shares on Facebook)")+
-  theme_bw()
-
-
-### model selection
-
-AICs <- AIC(M0,M1,M2,M3,M4,M5,M6,M7)
-MyDf <- AICs[,1]
-AICsNum <- AICs[,2]
-minAW <- min(AICsNum)
-Delta <- AICsNum-minAW
-RL <- exp(-0.5 * Delta)
-wi <- round(RL / sum(RL),3)
-Z <- data.frame(Model=rownames(AICs),AICs, AICsNum, Delta, wi)
-Z <- Z[order(Z$AIC),]
-Z
-
-
-# Model df     AIC AICsNum Delta    wi
-# M7    M7  6 3057.76 3057.76  0.00 0.414
-# M5    M5  8 3059.16 3059.16  1.40 0.206
-# M6    M6  7 3059.72 3059.72  1.96 0.156
-# M4    M4  9 3060.40 3060.40  2.64 0.111
-# M3    M3 10 3061.48 3061.48  3.72 0.065
-# M2    M2 11 3063.16 3063.16  5.40 0.028
-# M1    M1 12 3064.68 3064.68  6.92 0.013
-# M0    M0 14 3065.66 3065.66  7.90 0.008
-
-
-# Call:
-#   glmmadmb(formula = Share_FB ~ yr + Sensationalism_consensus + 
-#              (1 | Newspaper) + (1 | ID_event), data = db_glm[db_glm$yr < 
-#                                                                2020, ], family = "nbinom")
-# 
-# AIC: 3057.8 
-# 
-# Coefficients:
-#   Estimate Std. Error z value Pr(>|z|)    
-# (Intercept)                 -2688.362    434.440   -6.19  6.1e-10 ***
-#   yr                              1.334      0.215    6.20  5.6e-10 ***
-#   Sensationalism_consensusYes     1.150      0.503    2.29    0.022 *  
-#   ---
-#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
-# 
-# Number of observations: total=312, Newspaper=166, ID_event=92 
-# Random effect variance(s):
-#   Group=Newspaper
-# Variance StdDev
-# (Intercept)    6.554   2.56
-# Group=ID_event
-# Variance   StdDev
-# (Intercept) 3.247e-05 0.005698
-
-
-
-M7 <- glm.nb(Share_FB ~ yr + Sensationalism_consensus, data=db_glm)
-
-MyData1 <- data.frame(yr=seq(from =range(db_glm$yr)[1],
-                             to = range(db_glm$yr)[2],
-                             length = 100),
-                      Sensationalism_consensus="No")
-
-MyData2 <- data.frame(yr=seq(from =2010,
-                             to = 2019,
-                             length = 100),
-                      Sensationalism_consensus="Yes")
-
-P1 <- predict(M7, newdata = MyData1,se=TRUE,type="response") 
-P2 <- predict(M7, newdata = MyData1,se=TRUE,type="response",interval = "confidence")
-MyData1$mu    <- P1$fit  #Fitted values
-MyData1$selow <- P1$fit - 2 * P1$se.fit  #lower bound
-MyData1$seup  <- P1$fit + 2 * P1$se.fit   #lower bound
-
-MyData2$mu    <- P1$fit  #Fitted values
-MyData2$selow <- P1$fit - 2 * P1$se.fit  #lower bound
-MyData2$seup  <- P1$fit + 2 * P1$se.fit   #lower bound
-
-MyData =rbind(MyData1,MyData2)
-
-ggplot() + 
-  xlab("Year") +
-  ylab("Shares on Facebook")+
-  #facet_grid(~ Sensationalistic)+
-  
-  scale_x_continuous(breaks = c(2010:2019), labels = as.character(c(2010:2019)))+ 
-  geom_point(data = db_glm, aes(y = Share_FB, x = yr),shape = 16, size = 3, col="black",alpha=0.6) + 
-  #geom_point(data = db_glm, aes(y = Share_FB, x = yr, col=Species2),shape = 16, size = 2) + 
-  scale_color_manual(values=c("black", "#E69F00"))+
-  geom_ribbon(data = MyData2, aes(x = yr, ymax = seup,ymin = selow ),fill="deepskyblue3",alpha = 0.6)+
-  geom_line(data = MyData2,aes(x = yr, y = mu)) +
-  
-  theme_classic()+theme(legend.position = c(0.25, 0.8),
-                        legend.text = element_text(size=12,face = "italic"),
-                        legend.title = element_text(size=0,face="bold"))
-
-
-ggplot(data=db_glm, aes(y=Share_FB, x=Sensationalism_consensus))+
-  labs(x="Sensationalistic content", y = "Shares on Facebook")+
-  geom_boxplot(fill=c("grey40", "deepskyblue3"),alpha=0.8)+ 
-  geom_jitter(alpha=0.6,col="orange",shape=16, position=position_jitter(0.4))+
-  
-  theme_classic()
-
-
-
-
-##############
-
-library(maptools)
-library(ggplot2)
-library(ggalt)
-library(ggthemes)
-library(tibble)
-library(viridis)
-
-# get italy region map
-italy_map <- map_data("italy")
-
-# your data will need to have these region names
-print(unique(italy_map$region))
-
-# we'll simulate some data for this
-set.seed(1492)
-choro_dat <- data_frame(region=unique(italy_map$region),
-                        value=sample(100, length(region)))
-
-# we'll use this in a bit
-italy_proj <- "+proj=aea +lat_1=38.15040684902542
-+lat_2=44.925490198742295 +lon_0=12.7880859375"
-
-gg <- ggplot()
-
-# lay down the base layer
-gg <- gg + geom_map(data=italy_map, map=italy_map,
-                    aes(long, lat, map_id=region),
-                    color="#b2b2b2", size=0.1, fill=NA)
-
-
-
-# fill in the regions with the data
-gg <- gg + geom_map(data=choro_dat, map=italy_map,
-                    #aes(fill=value, map_id=region)
-                    aes(map_id=region),
-                    fill="grey70",
-                    color="#b2b2b2", size=0.1)
-
-# great color palette (use a better legend title)
-gg <- gg + scale_fill_viridis(name="Scale title")
-
-# decent map projection for italy choropleth
-gg <- gg + coord_proj(italy_proj)
-
-gg <- gg + geom_point(data=db_unique_ID, aes(x=x, y=y),color = "black",  size=2.4)
-gg <- gg + geom_point(data=db_unique_ID, aes(x=x, y=y,col=Species), size=2)
-gg <- gg +   scale_color_manual(values=c("blue","grey20", "#E69F00"))
-
-# good base theme for most maps
-gg <- gg + theme_classic()
-
-# move the legend
-gg <- gg + theme(legend.position = c(0.2, 0.2),
-                 legend.text = element_text(size=12,face = "italic"),
-                 legend.title = element_text(size=0,face="bold"))
-
-
-gg
-
-
-
-##############
-
-
-library(tidyverse)
-library(viridis)
-library(hrbrthemes)
-library(mapdata)
-library(dplyr)
-library(ggplot2)
-
-
-library(rgdal)
-library(raster)
-boundaries<-readOGR("/Users/stefanomammola/Desktop/BIOCLIM/SHAPE","GSHHS_i_L1") 
-boundaries=crop(boundaries,extent(0,40,34,50))
-
-
-library(rworldmap)
-world <- ne_countries(scale = "medium", returnclass = "sf")
-class(world)
-
-Italy <- world %>% filter(sovereignt == "Italy")
-
-
-# plot
-db %>%
-  #filter(homecontinent=='Europe') %>%
-  ggplot( aes(x=x, y=y)) + 
-  #geom_sf(data = Italy)+
-  geom_hex(bins=39,alpha=1) +
-  #geom_polygon(data=boundaries,aes(x=long, y=lat, group=group),fill=NA, size=.4,color="grey20",lty=1, alpha = 1)+
-  ggplot2::annotate("text", x = -27, y = 72, label="Where spider-related events took place", colour = "black", size=5, alpha=1, hjust=0) +
-  ggplot2::annotate("segment", x = -27, xend = 10, y = 70, yend = 70, colour = "black", size=0.2, alpha=1) +
-  theme_void() +
-  xlim(0, 40) +
-  ylim(34, 50) +
-  scale_fill_viridis(
-    option="B",
-    breaks=c(10,20,30,40),
-    name="N° of events", 
-    guide = guide_legend( keyheight = unit(2.5, units = "mm"), keywidth=unit(10, units = "mm"), label.position = "bottom", title.position = 'top', nrow=1) 
-  )  +
-  ggtitle( "" ) +
-  theme(
-    legend.position = c(0.8, 0.09),
-    legend.title=element_text(color="black", size=8),
-    text = element_text(color = "#22211d"),
-    plot.background = element_rect(fill = "#f5f5f2", color = NA), 
-    panel.background = element_rect(fill = "#f5f5f2", color = NA), 
-    legend.background = element_rect(fill = "#f5f5f2", color = NA),
-    plot.title = element_text(size= 13, hjust=0.1, color = "#4e4d47", margin = margin(b = -0.1, t = 0.4, l = 2, unit = "cm")),
-  ) 
-
-
-
-
-library(ggplot2)
-library(maptools)
-
-# Load the dataset of points
-
-
-
-italy_map <- map_data("italy")
-colnames(italy_map)[1] <- "x"
-colnames(italy_map)[2] <- "y"
-
-p  <- ggplot(data=db, aes(x=x,y=y)) + stat_binhex(bins=80, binwidth=c(1,1)) +
-  geom_map(data=italy_map, map=italy_map,
-           aes(x, y, map_id=region),
-           color="#b2b2b2", size=1, fill=NA)+
-  scale_fill_gradientn(colours=c('light gray','blue'),name='Frequency',na.value=NA) +
-  coord_equal() +
-  labs(x=NULL, y=NULL) +
-  theme_bw() +
-  theme(legend.position=c(0.075,0.28))
-
-
-
-hist(rnorm(10))
 

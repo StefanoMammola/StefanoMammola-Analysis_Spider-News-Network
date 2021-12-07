@@ -41,14 +41,16 @@ axis_labels_sjPlot_m2 = c("Year of publication",
                           "Expert [Arachnologist]",
                           "Expert [Others]")
 
-axis_labels_sjPlot_m3 = c("Number of articles",
-                          "Sensationalism",
-                          "Errors",
+axis_labels_sjPlot_m3 = c("N° of deadly spiders",
+                          "Press freedom",
+                          "N° of newspaper",
                           "Internet users",
-                          "Number of spiders",
-                          "Lenguage [English]",
-                          "Lenguage [Others]",
-                          "Lenguage [Spanish]")
+                          "Sensationalistic news [Proportion]",
+                          "News with errors [Proportion]",
+                          "Lenguage [Spanish]",
+                          "Lenguage [Russian]",
+                          "Lenguage [Arabic]",
+                          "Lenguage [English]")
 
 axis_labels_ergm1 <- c("Edges", 
                        "nodeMatch [Language]", 
@@ -62,12 +64,12 @@ axis_labels_ergm1 <- c("Edges",
 
 title_sjPlot_m1    = "Drivers of sensationalism"
 title_sjPlot_m2    = "Drivers of errors [any error type]"
-title_sjPlot_m3    = "Drivers of country centrality in the network"
-title_ergm1        = "Drivers of country importance in the network"
+title_sjPlot_m3    = "Drivers of country centrality\nin the network"
+title_ergm1        = "Drivers of country importance\nin the network"
 
 xlab_sjPlot_m1_m2 = expression(paste("Odds ratio" %+-% "Standard Error"))
 xlab_sjPlot_m3    = expression(paste("Incidence odds ratio" %+-% "Standard Error"))
-xlab_ergm1_ergm2  = expression(paste("Estimated coefficient" %+-% "Standard Error"))
+xlab_ergm1        = expression(paste("Estimated coefficient" %+-% "Standard Error"))
 
 ###########
 # Themes ##
