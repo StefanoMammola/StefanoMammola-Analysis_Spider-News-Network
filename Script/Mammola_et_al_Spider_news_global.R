@@ -178,7 +178,7 @@ NoNews <- data.frame(Country_search = c("Botswana", "Iceland"),
                         N = c(0,0),
                         Sensationalism = c(0,0),
                         TotalError = c(0,0),
-                        Language = c("English","English"),
+                        Language = c("English","Icelandic"),
                         lon = c(23.90,-19.22),
                         lat = c(-21.60,64.82))
 
