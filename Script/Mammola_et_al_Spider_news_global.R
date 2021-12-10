@@ -703,7 +703,13 @@ dev.off()
 
 # Export model summaries --------------------------------------------------
 
-m3 %>% sjPlot::tab_model()
+#m3 %>% sjPlot::tab_model()
+
+#Make tables... to do
+
+
+
+### Supplementary analysis on network of news ###
 
 ###############################################################
 
@@ -734,12 +740,6 @@ rm(i) #clean
 
 
 # Analysing ID_Event-level network properties -----------------------------
-
-# Question 1a: (Node-level)
-
-# Question 1b: (Edge-level)
-
-#--------------------------------------------------------------------------
 
 # Takes the unipartite project graph
 Graph_unipartite2 <- Graph_unipartite_full$proj2 %>% as_tbl_graph(directed = FALSE) %>% 
