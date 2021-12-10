@@ -75,14 +75,6 @@ NodeTraitGet <- function(Graph, mode = "in", dir = TRUE){
     Eigenvector = Graph %>% eigen_centrality(directed = dir) %>% extract2("vector"),
     Betweenness = Graph %>% betweenness(directed = dir),
     Closeness   = Graph %>% closeness(mode = mode)
-    
-    # Eigenvector_Weighted = Graph %>% 
-    #   eigen_centrality(weights = Graph %>% activate(edges) %>% pull(weight)) %>% 
-    #   extract2("vector"),
-    #<< 
-    
-    #Clustering = Graph %>% transitivity(type = "local"),
-    
   )
 }
 
@@ -110,7 +102,9 @@ NetworkTraitGet <- function(Graph){
     
     Density = ggregplot::Prev(get.adjacency(Graph, sparse = F) > 0),
     
-    LouvainModularity = Graph %>% cluster_louvain %>% membership %>% modularity(Graph, .)
+    LouvainModularity = Graph %>% cluster_louvain %>% membership %>% modularity(Graph, .),
+    
+    RealizedConnectance = ecount(Graph) / ((vcount(Graph)*(vcount(Graph)-1))/2)
     
   ) %>% return
   

@@ -22,7 +22,8 @@ rm(list=ls())
 # Loading R package -------------------------------------------------------
 library("Amelia")       
 library("bipartite")     
-library("dplyr")         
+library("dplyr")  
+library("flextable")
 library("geosphere")     
 library("GGally")        
 library("ggalt")         
@@ -42,7 +43,7 @@ library("rworldmap")
 library("scatterpie")
 library("sna")           
 library("tidygraph")
-library("tidyverse")     
+library("tidyverse")   
 
 # Loading useful functions ------------------------------------------------
 
@@ -142,8 +143,8 @@ sort(table(db$Species))
 nlevels(droplevels(db_unique_news$Country_search))  # +2 with no news (Botswana / Iceland)
 sort(table(db_unique_news$Country_search))
 
-#Number of lenguages
-nlevels(droplevels(db$Lenguage)) 
+#Number of Languages
+nlevels(droplevels(db$Language)) 
 
 #Distinct event
 table(db_unique_news$TypeEvent)
@@ -161,25 +162,25 @@ CountryAttributes <- read.csv(file = "Data/CountryAttributes_Demography.csv", se
 country_attr <- db %>% dplyr::select(Country_search,
                                      Sensationalism,
                                      TotalError,
-                                     Lenguage,
+                                     Language,
                                      lon3,
                                      lat3) %>% group_by(Country_search) %>% 
   summarise(N = length(Country_search),
             Sensationalism = sum(Sensationalism, na.rm = TRUE)/length(Sensationalism), #proportion of sensationalistic news/country
             TotalError = sum(TotalError, na.rm = TRUE)/length(TotalError), #proportion of news with error/country
-            Lenguage = names(sort(table(Lenguage), decreasing = TRUE))[1], #main country lenguage
+            Language = names(sort(table(Language), decreasing = TRUE))[1], #main country Language
             lon = mean(lon3), #Longitude
             lat = mean(lat3)) #latitude
 
 # All language with less than 10 country become "Others":
-country_attr$Lenguage <- ifelse(country_attr$Lenguage %in% names(which(table(country_attr$Lenguage)>9)), country_attr$Lenguage , "Others")
+country_attr$Language <- ifelse(country_attr$Language %in% names(which(table(country_attr$Language)>9)), country_attr$Language , "Others")
 
 # Add Countries with no News
 NoNews <- data.frame(Country_search = c("Botswana", "Iceland"),
                         N = c(0,0),
                         Sensationalism = c(0,0),
                         TotalError = c(0,0),
-                        Lenguage = c("English","English"),
+                        Language = c("English","English"),
                         lon = c(23.90,-19.22),
                         lat = c(-21.60,64.82))
 
@@ -194,7 +195,7 @@ country_attr <- country_attr %>% dplyr::left_join(CountryAttributes, by = c("Cou
                   N,
                   Sensationalism,
                   TotalError,
-                  Lenguage,
+                  Language,
                   lon, 
                   lat, 
                   ISA, #number of arachnologist in the country.
@@ -294,16 +295,16 @@ db$Country_search2 <- db$Country_search ; table(db$Country_search2)
 rename <- names(which(table(db$Country_search2) < 50))
 levels(db$Country_search2)[levels(db$Country_search2) %in% rename]  <- "Other"
 
-db$Lenguage2 <- db$Lenguage ; table(db$Lenguage2)
-rename <- names(which(table(db$Lenguage2) < 50))
-levels(db$Lenguage2)[levels(db$Lenguage2) %in% rename]  <- "Other"
+db$Language2 <- db$Language ; table(db$Language2)
+rename <- names(which(table(db$Language2) < 50))
+levels(db$Language2)[levels(db$Language2) %in% rename]  <- "Other"
 
 # Setting baseline for factors
 db <- within(db, Family2 <- relevel(Family2, ref = "Other"))
 db <- within(db, Country_search2 <- relevel(Country_search2, ref = "Other"))
 db <- within(db, Circulation <- relevel(Circulation, ref = "Regional"))
 db <- within(db, Type_of_newspaper <- relevel(Type_of_newspaper, ref = "Traditional newspaper"))
-db <- within(db, Lenguage2<- relevel(Lenguage2, ref = "Other"))
+db <- within(db, Language2<- relevel(Language2, ref = "Other"))
 
 rm(rename)
 
@@ -329,7 +330,7 @@ db_m <- db %>% dplyr::select(
   Family2,
   Genus,
   Country_search2,
-  Lenguage2,
+  Language2,
   lon2,
   lat2) %>% mutate_if(is.numeric, scale)
 
@@ -346,18 +347,19 @@ nrow(db_m)
 
 # Fitting the model: Sensationalism ---------------------------------------
 
-# Fit the model
-m1 <- lme4::glmer(Sensationalism ~ yr + Type_of_newspaper + Circulation + TypeEvent + Figure_species + Figure_bite +
+formula_m1 <- as.formula("Sensationalism ~ yr + Type_of_newspaper + Circulation + TypeEvent + Figure_species + Figure_bite +
                     TotalError.01 + Expert_doctor + Expert_arachnologist + Expert_others +
-                    (1|ID_Event) + (1|Genus) + (1|Country_search2) + (1|Lenguage2), 
+                    (1|ID_Event) + (1|Genus) + (1|Country_search2) + (1|Language2)")
+# Fit the model
+m1 <- lme4::glmer(formula_m1, 
                   data    = db_m, 
                   family  = binomial(link = "logit"),
                   control = glmerControl(optimizer="bobyqa"))
 
 # Check model
-performance::check_model(m1, check = c("vif", "reqq"))
+performance::check_model(m1, check = c("vif"))
+performance::check_model(m1, check = c("reqq"))
 
-# Model residuals vs temporal and spatial factors
 R_m1 <- residuals(m1)
 
 par(mfrow = c(2,2),mar = c(2,2,2,2))
@@ -369,13 +371,8 @@ boxplot(R_m1 ~ as.factor(db_m$yr), xlab = NULL,  ylab = "Residuals",  main = "Re
 # Interpret the model
 (fit <- parameters::model_parameters(m1))
 performance::r2(m1)
-fit$Parameter
 
 # color for plot 
-color_p_value <- ifelse(round(fit$p[2:14],3) > 0.05, 
-                        "grey5", 
-                        ifelse(fit$Coefficient[2:14] > 0, "darkmagenta", "blue"))
-                        
 # Plot
 (plot_model1 <- sjPlot::plot_model(m1, 
                                    title = title_sjPlot_m1,
@@ -392,17 +389,20 @@ color_p_value <- ifelse(round(fit$p[2:14],3) > 0.05,
 rm(fit,R_m1) #clean
 
 # Fitting the model: Errors ---------------------------------------
-m2 <- lme4::glmer(TotalError.01 ~ yr + Type_of_newspaper + Circulation + TypeEvent +
+
+formula_m2 <- as.formula("TotalError.01 ~ yr + Type_of_newspaper + Circulation + TypeEvent +
                       Sensationalism + Expert_doctor + Expert_arachnologist + Expert_others +
-                    (1|ID_Event) + (1|Genus) + (1|Lenguage2) + (1|Country_search2), 
+                    (1|ID_Event) + (1|Genus) + (1|Language2) + (1|Country_search2)")
+# Fit the model
+m2 <- lme4::glmer(formula_m2, 
                   data = db_m, 
                   family = binomial(link = "logit"),
                   control = glmerControl(optimizer="bobyqa"))
 
 # Check model
-performance::check_model(m2, check = c("vif", "reqq"))
+performance::check_model(m2, check = c("vif"))
+performance::check_model(m2, check = c("reqq"))
 
-# Model residuals vs temporal and spatial factors
 R_m2 <- residuals(m2)
 
 par(mfrow = c(2,2),mar = c(2,2,2,2))
@@ -426,20 +426,9 @@ performance::r2(m2)
                                    show.values = FALSE, 
                                    value.offset = .3, 
                                    se = TRUE, 
-                                   show.p = FALSE) + ylim(-.8,1.4) +theme_custom())
+                                   show.p = FALSE) + ylim(-.8,1.4) + theme_custom())
 
 rm(fit,R_m1) #clean
-
-# Figure 2 ----------------------------------------------------------------
-
-# pdf(file = "Figures/Figure_2.pdf", width = 12, height =5)
-# ggpubr::ggarrange(plot_model1,plot_model2,
-#                   common.legend = FALSE,
-#                   hjust = -4,
-#                   align = "v",
-#                   labels = c("A","B"),
-#                   ncol=2)
-# dev.off()
 
 ###############################################################
 
@@ -476,12 +465,11 @@ Graph_unipartite <- Graph_unipartite_full$proj1  %>% as_tbl_graph(directed = TRU
   as_tbl_graph
 
 # Summary stats
-NetworkTraitGet(Graph_unipartite)
+round(NetworkTraitGet(Graph_unipartite),2)
 
 # Calculating node level traits 
 node_trait <- Graph_unipartite %>% 
                    NodeTraitGet(mode = "in", dir = FALSE) %>% bind_cols()
-node_trait
 
 # Combine them with the Country attributes
 country_attr <- country_attr %>% dplyr::left_join(node_trait, by = c("Country_search" = "ID"))
@@ -498,23 +486,29 @@ Graph_unipartite <- Graph_unipartite %>% tidygraph::activate(nodes) %>%
 # Plot the network [comparing three layouts]
 SpatialLayout <- country_attr[1:79,] %>% dplyr::select(lon,lat) %>% as.matrix #geo-coordinates
 
+#layout <- create_layout(Graph_unipartite, layout = 'igraph', algorithm = 'kk')
+
 #SpatialLayout
 (plot_network <- Graph_unipartite %>% 
   igraph::simplify(edge.attr.comb = "sum") %>% 
   ggraph::ggraph(SpatialLayout) +
   #geom_edge_density(fill="orange", alpha=1) +
-  geom_edge_fan(aes(width=weight),color="gray60", alpha=0.1) +
+  geom_edge_fan(aes(width=weight),color="gray60", alpha=0.05) +
   geom_node_point(col="grey30", alpha = .8, 
-                  aes(size=N,fill=Lenguage), shape = 21) + 
+                  aes(size=N,fill=Language), shape = 21) + 
   geom_node_text(aes(label = name), size=2, color="gray10", repel=TRUE) +
   scale_fill_manual(values = c("blue", "orange", "turquoise","purple", "grey15")) +
-  theme_void() + theme(legend.position = "top",legend.direction = "vertical") + coord_fixed())
+  theme_void() + theme(legend.position = "bottom",legend.direction = "vertical") + coord_fixed())
+
+pdf(file = "Figures/Figure_S1.pdf", width = 10, height = 7)
+plot_network
+dev.off()
 
 ###################################
 # Regression Models #
 ###################################
 
-db_m3_cat <- country_attr %>% dplyr::select(Degree, Country_search, Lenguage) #Dependent variable + categorical
+db_m3_cat <- country_attr %>% dplyr::select(Degree, Country_search, Language) #Dependent variable + categorical
 db_m3_con <- country_attr %>% dplyr::select(N, ISA, Sensationalism, TotalError, Education_index,
                                             Internet_users, N_newspapers, Press_Freedom, N_Spiders, N_Deadly_Spiders) #Continuous variables
 
@@ -526,8 +520,8 @@ for(i in 1:ncol(db_m3_con))
   dotchart(as.numeric(db_m3_con[,i]), main = colnames(db_m3_con)[i])
 
 #log transform
-db_m3_con$N <- log(db_m3_con$N+1)
-db_m3_con$ISA <- log(db_m3_con$ISA+1)
+db_m3_con$N            <- log(db_m3_con$N+1)
+db_m3_con$ISA          <- log(db_m3_con$ISA+1)
 db_m3_con$N_newspapers <- log(db_m3_con$N_newspapers+1)
 
 # Check collinearity
@@ -537,35 +531,37 @@ psych::pairs.panels(db_m3_con)
 #Number of newspaper with N 
 #ISA and N
 
-# Check association between Lenguage and continous var
-Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=Internet_users)) + geom_boxplot() + theme_custom()
-Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=N_newspapers)) + geom_boxplot() + theme_custom()
-Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=Sensationalism)) + geom_boxplot() + theme_custom()
-Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=TotalError)) + geom_boxplot() + theme_custom()
-Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=Press_Freedom)) + geom_boxplot() + theme_custom()
-Graph_unipartite %>% as.data.frame %>% ggplot(aes(x=Lenguage,y=N_Deadly_Spiders)) + geom_boxplot() + theme_custom()
+# Check collinearity vs categorical
+(collinearity <- country_attr %>% dplyr::select(Language, N, ISA, Sensationalism, TotalError, Education_index,
+                               Internet_users, N_newspapers, Press_Freedom, N_Spiders, 
+                               N_Deadly_Spiders) %>% 
+       GGally::ggpairs(aes(colour = Language, alpha = 0.4)))
+
+pdf(file = "Figures/Figure_S2.pdf", width = 18, height =14)
+collinearity + theme_bw() 
+dev.off()
 
 #Check balance of levels
-db_m3_cat$Lenguage %>% table
+db_m3_cat$Language %>% table
 
-# scale all var
+# Scale all var
 db_m3_con <- db_m3_con %>% apply(MARGIN = 2, scale) #scale cont variable
 
-#merge
+# Merge
 db_m3 <- data.frame(db_m3_cat, db_m3_con) ; rm(db_m3_cat, db_m3_con)
 
-# Remove missing values
+# Remove missing values (if any)
 db_m3_noNA <- na.omit(db_m3)
 
 # Set reference level
-db_m3_noNA$Lenguage <- as.factor(db_m3_noNA$Lenguage)
+db_m3_noNA$Language <- as.factor(db_m3_noNA$Language)
 
-db_m3_noNA$Lenguage <- factor(db_m3_noNA$Lenguage, levels = c("Others", "English", "Arabic", "Russian", "Spanish"))
+db_m3_noNA$Language <- factor(db_m3_noNA$Language, levels = c("Others", "English", "Arabic", "Russian", "Spanish"))
 
 # Fit the model -----------------------------------------------------------
 
 # Set formula
-formula_m3 <- as.formula("Degree ~ Lenguage + Sensationalism + TotalError + Internet_users + N_newspapers + Press_Freedom + N_Deadly_Spiders")
+formula_m3 <- as.formula("Degree ~ Sensationalism + TotalError + Internet_users + Press_Freedom + N_Spiders + N_Deadly_Spiders")
 
 # Fit the model
 m3 <- glm(formula_m3, family = "poisson", data = db_m3_noNA)
@@ -590,7 +586,7 @@ performance::r2(m3)
                                    vline.color = "grey80",
                                    color = "grey5",
                                    axis.title = xlab_sjPlot_m3, 
-                                   axis.labels = axis_labels_sjPlot_m3, 
+                                   #axis.labels = axis_labels_sjPlot_m3, 
                                    show.values = FALSE, 
                                    value.offset = .3, 
                                    se = TRUE, 
@@ -613,13 +609,16 @@ colnames(AdjMatrix) <- rownames(AdjMatrix) <- Graph_unipartite %>% activate(node
 #Response variables
 ResponseNetwork <- AdjMatrix %>% as.matrix %>% network::network(directed = FALSE)
 
+levels(db_m3_noNA$Language)[2] <- "AAA_English"
+
 #Adding node-level attributes
-ResponseNetwork %v% "Lenguage"         <- as.character(db_m3_noNA[1:79,]$Lenguage)
+ResponseNetwork %v% "Language"         <- as.character(db_m3_noNA[1:79,]$Language)
 ResponseNetwork %v% "Sensationalism"   <- db_m3_noNA[1:79,]$Sensationalism
 ResponseNetwork %v% "TotalError"       <- db_m3_noNA[1:79,]$TotalError
 ResponseNetwork %v% "Internet"         <- db_m3_noNA[1:79,]$Internet_users
 ResponseNetwork %v% "Freedom"          <- db_m3_noNA[1:79,]$TotalError
 ResponseNetwork %v% "N_Deadly_Spiders" <- db_m3_noNA[1:79,]$N_Deadly_Spiders
+ResponseNetwork %v% "N_Spiders"        <- db_m3_noNA[1:79,]$N_Spiders
 
 # Model fit
 ergm0 <- ergm::ergm(ResponseNetwork ~ edges, estimate = "MLE")
@@ -627,14 +626,15 @@ ergm1 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout), estimate =
 ergm2 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism"), estimate = "MLE")
 ergm3 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError"), estimate = "MLE")
 ergm4 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders"), estimate = "MLE")
-ergm5 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodefactor("Lenguage"), estimate = "MLE")
-ergm6 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodefactor("Lenguage") + nodecov("Internet"), estimate = "MLE")
-ergm7 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodefactor("Lenguage") + nodecov("Internet") + nodecov("Freedom"), estimate = "MLE")
-ergm8 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodefactor("Lenguage") + nodematch("Lenguage") + nodecov("Internet"), estimate = "MLE")
+ergm5 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodefactor("Language"), estimate = "MLE")
+ergm6 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodefactor("Language") + nodecov("Internet"), estimate = "MLE")
+ergm7 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodefactor("Language") + nodecov("Internet") + nodecov("Freedom"), estimate = "MLE")
+ergm8 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodefactor("Language") + nodematch("Language") + nodecov("Internet"), estimate = "MLE")
+ergm9 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodecov("N_Spiders") + nodecov("Internet") + nodefactor("Language") + nodematch("Language"), estimate = "MLE")
+#ergm10 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodecov("N_Spiders") + nodecov("Internet") +  nodecov("N"), estimate = "MLE")
 
-list(ergm0, ergm1, ergm2, ergm3, ergm4, ergm5, ergm6, ergm7, ergm8) %>% map_dbl(BIC) %>% plot
-
-ergm_BIC <- ergm8
+list(ergm0, ergm1, ergm2, ergm3, ergm4, ergm5, ergm6, ergm7, ergm8, ergm9) %>% map_dbl(BIC) %>% plot
+ergm_BIC <- ergm9
 
 # Model validation
 
@@ -655,8 +655,9 @@ qplot(1:NSims, Sims %>% map_dbl(~.x %>% as.matrix %>% c %>% Prev)) + ylab("preva
 
 rm(BlankNetwork, NSims)#clean
 
-# Interpret the model
+summary(ergm9)
 
+# Interpret the model
 EstimateDF <- 
   ergm_BIC %>% summary %>% extract2("coefficients") %>% 
   as.data.frame %>% 
@@ -671,23 +672,22 @@ EstimateDF %<>% # Bind them together
   bind_cols(ergm_BIC %>% confint %>% as.data.frame %>% 
               rename(Lower = 1, Upper = 2))
 
-EstimateDF %>% head
-
 EstimateDF$Variable <- c("Edges", 
                          "Coordinates", 
-                         "Sensationalistic news [Proportion]", 
-                         "News with errors [Proportion]",
+                         "Prop. of sensationalistic news", 
+                         "Prop. of news with errors",
                          "N° of deadly spiders",
-                         "Lenguage [English]",
-                         "Lenguage [Others]",
-                         "Lenguage [Russian]",
-                         "Lenguage [Spanish]",
-                         "Language [Node match]",
-                         "Internet users")
+                         "N° of spiders",
+                         "Internet users",
+                         "Language [Arabic]",
+                         "Language [Others]",
+                         "Language [Russian]",
+                         "Language [Spanish]",
+                         "Language [Node match]")
 
 (plot_ergm1 <- EstimateDF %>% ggplot2::ggplot(aes(Variable, Estimate)) +
-  geom_hline(lty = 1, col = "grey60", yintercept = 0) +
-  geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0) +
+  geom_hline(lty = 1, size = 1.2, col = "grey80", yintercept = 0) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0, col = "grey5") +
   labs(y     = xlab_ergm1, 
        title = title_ergm1) +
       geom_point() + theme_custom() + theme(axis.title.y=element_blank()) + coord_flip())
@@ -697,11 +697,15 @@ EstimateDF$Variable <- c("Edges",
 pdf(file = "Figures/Figure_2.pdf", width = 14, height =10)
 ggpubr::ggarrange(plot_model1,plot_model2,plot_model3,plot_ergm1,
                   common.legend = FALSE,
-                  hjust = -4,
+                  hjust = -5,
                   align = "hv",
                   labels = c("A", "B", "C", "D"),
                   ncol=2, nrow=2)
 dev.off()
+
+# Export model summaries --------------------------------------------------
+
+m3 %>% sjPlot::tab_model()
 
 ###############################################################
 

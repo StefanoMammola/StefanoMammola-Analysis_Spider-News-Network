@@ -65,7 +65,7 @@ axis_labels_ergm1 <- c("Edges",
 title_sjPlot_m1    = "Drivers of sensationalism"
 title_sjPlot_m2    = "Drivers of errors [any error type]"
 title_sjPlot_m3    = "Drivers of country centrality\nin the network"
-title_ergm1        = "Drivers of country importance\nin the network"
+title_ergm1        = "Drivers of country connectivity\nin the network"
 
 xlab_sjPlot_m1_m2 = expression(paste("Odds ratio" %+-% "Standard Error"))
 xlab_sjPlot_m3    = expression(paste("Incidence odds ratio" %+-% "Standard Error"))
