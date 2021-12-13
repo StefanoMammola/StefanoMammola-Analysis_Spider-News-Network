@@ -559,7 +559,14 @@ db_m3_noNA$Language <- factor(db_m3_noNA$Language, levels = c("Others", "English
 # Fit the model -----------------------------------------------------------
 
 # Set formula
-formula_m3 <- as.formula("Degree ~ Sensationalism + TotalError + Internet_users + Press_Freedom + N_Spiders + N_Deadly_Spiders")
+formula_m3 <- as.formula("Degree ~ Sensationalism + TotalError + Internet_users + Press_Freedom + N_Spiders + (1|Language)")
+
+# Fit the model
+m3 <- lme4::glmer(formula_m3, 
+                  data    = db_m3_noNA, 
+                  family  = poisson,
+                  control = glmerControl(optimizer="bobyqa"))
+
 
 # Fit the model
 m3 <- glm(formula_m3, family = "poisson", data = db_m3_noNA)
@@ -568,8 +575,9 @@ m3 <- glm(formula_m3, family = "poisson", data = db_m3_noNA)
 performance::check_overdispersion(m3) #Overdispersed
 
 # Switch to negative binomial
-m3 <- MASS::glm.nb(formula_m3, data = db_m3_noNA)
-
+m3 <- lme4::glmer.nb(formula_m3, 
+                  data    = db_m3_noNA,
+                  control = glmerControl(optimizer="bobyqa"))
 # Check model
 performance::check_model(m3)
 
@@ -583,7 +591,7 @@ performance::r2(m3)
                                    sort.est = FALSE,  
                                    vline.color = "grey80",
                                    color = "grey5",
-                                   axis.title = xlab_sjPlot_m3, 
+                                   #axis.title = xlab_sjPlot_m3, 
                                    #axis.labels = axis_labels_sjPlot_m3, 
                                    show.values = FALSE, 
                                    value.offset = .3, 

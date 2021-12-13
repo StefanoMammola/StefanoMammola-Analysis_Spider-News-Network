@@ -41,16 +41,11 @@ axis_labels_sjPlot_m2 = c("Year of publication",
                           "Expert [Arachnologist]",
                           "Expert [Others]")
 
-axis_labels_sjPlot_m3 = c("N° of deadly spiders",
+axis_labels_sjPlot_m3 = c("N° of spiders",
                           "Press freedom",
-                          "N° of newspaper",
                           "Internet users",
-                          "Sensationalistic news [Proportion]",
                           "News with errors [Proportion]",
-                          "Lenguage [Spanish]",
-                          "Lenguage [Russian]",
-                          "Lenguage [Arabic]",
-                          "Lenguage [English]")
+                          "Sensationalistic news [Proportion]")
 
 axis_labels_ergm1 <- c("Edges", 
                        "nodeMatch [Language]", 
