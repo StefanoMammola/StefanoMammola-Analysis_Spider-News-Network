@@ -32,7 +32,6 @@ library("gridExtra")
 library("ggregplot")
 library("igraph")        
 library("lme4")
-library("MASS")
 library("magrittr")
 library("network")       
 library("performance")   
@@ -170,9 +169,6 @@ country_attr <- db %>% dplyr::select(Country_search,
             lon = mean(lon3), #Longitude
             lat = mean(lat3)) #latitude
 
-# All language with less than 10 country become "Others":
-country_attr$Language <- ifelse(country_attr$Language %in% names(which(table(country_attr$Language)>9)), country_attr$Language , "Others")
-
 # Add Countries with no News
 NoNews <- data.frame(Country_search = c("Botswana", "Iceland"),
                         N = c(0,0),
@@ -203,8 +199,11 @@ country_attr <- country_attr %>% dplyr::left_join(CountryAttributes, by = c("Cou
                   Press_Freedom    = Press_Freedom_Index,
                   N_Spiders        = N_Spiders,
                   N_Deadly_Spiders = N_Deadly)
-                  
+
 rm(CountryAttributes) #clean
+
+# All language with less than 10 country become "Others":
+country_attr$Language <- ifelse(country_attr$Language %in% names(which(table(country_attr$Language)>9)), country_attr$Language , "Others")
 
 # Predict missing data
 country_attr[,9:12] <- BAT::fill(data.frame(country_attr[,9:12]))
@@ -363,14 +362,16 @@ R_m1 <- residuals(m1)
 par(mfrow = c(2,2),mar = c(2,2,2,2))
 plot(db_m$lon2, R_m1, xlab = "Longitude", ylab = "Residuals",  main = "Residuals vs Longitude")
 plot(db_m$lat2, R_m1, xlab = "Latitude",  ylab = "Residuals",  main = "Residuals vs Latitude")
-boxplot(R_m1 ~ as.factor(db_m$m), xlab = NULL, ylab = "Residuals",  main = "Residuals vs month")
+boxplot(R_m1 ~ as.factor(db_m$m),  xlab = NULL,  ylab = "Residuals",  main = "Residuals vs month")
 boxplot(R_m1 ~ as.factor(db_m$yr), xlab = NULL,  ylab = "Residuals",  main = "Residuals vs year")
 
 # Interpret the model
-(fit <- parameters::model_parameters(m1))
+(fit_m1 <- parameters::model_parameters(m1))
 performance::r2(m1)
 
-# color for plot 
+# Save the table
+sjPlot::tab_model(m1, file = "Tables/Table S1.docx")
+
 # Plot
 (plot_model1 <- sjPlot::plot_model(m1, 
                                    title = title_sjPlot_m1,
@@ -384,13 +385,13 @@ performance::r2(m1)
                                    se = TRUE, 
                                    show.p = FALSE) + ylim(-.8,1.4) + theme_custom())
 
-rm(fit,R_m1) #clean
+rm(R_m1) #clean
 
 # Fitting the model: Errors ---------------------------------------
 
 formula_m2 <- as.formula("TotalError.01 ~ yr + Type_of_newspaper + Circulation + TypeEvent +
-                      Sensationalism + Expert_doctor + Expert_arachnologist + Expert_others +
-                    (1|ID_Event) + (1|Genus) + (1|Language2) + (1|Country_search2)")
+                         Sensationalism + Expert_doctor + Expert_arachnologist + Expert_others +
+                         (1|ID_Event) + (1|Genus) + (1|Language2) + (1|Country_search2)")
 # Fit the model
 m2 <- lme4::glmer(formula_m2, 
                   data = db_m, 
@@ -410,8 +411,11 @@ boxplot(R_m2 ~ as.factor(db_m$m), xlab = NULL, ylab = "Residuals",  main = "Resi
 boxplot(R_m2 ~ as.factor(db_m$yr), xlab = NULL,  ylab = "Residuals",  main = "Residuals vs year")
 
 # Interpret the model
-(fit <- parameters::model_parameters(m2))
+(fit_m2 <- parameters::model_parameters(m2))
 performance::r2(m2)
+
+#save the table
+sjPlot::tab_model(m2, file = "Tables/Table S2.docx")
 
 # Plot
 (plot_model2 <- sjPlot::plot_model(m2, 
@@ -426,7 +430,7 @@ performance::r2(m2)
                                    se = TRUE, 
                                    show.p = FALSE) + ylim(-.8,1.4) + theme_custom())
 
-rm(fit,R_m1) #clean
+rm(R_m2) #clean
 
 ###############################################################
 
@@ -440,7 +444,7 @@ Graph_bipartite <- db %>%
             table() %>% 
             igraph::graph_from_incidence_matrix(directed = TRUE) %>% 
             tidygraph::as_tbl_graph(directed = TRUE) 
- 
+
 # Collapse it into an unipartite 
 Graph_unipartite_full <- igraph::bipartite_projection(Graph_bipartite)
 
@@ -559,17 +563,13 @@ db_m3_noNA$Language <- factor(db_m3_noNA$Language, levels = c("Others", "English
 # Fit the model -----------------------------------------------------------
 
 # Set formula
-formula_m3 <- as.formula("Degree ~ Sensationalism + TotalError + Internet_users + Press_Freedom + N_Spiders + (1|Language)")
+formula_m3 <- as.formula("Degree ~ Sensationalism + TotalError + Internet_users + Press_Freedom + N_Spiders  + (1|Language)")
 
 # Fit the model
 m3 <- lme4::glmer(formula_m3, 
                   data    = db_m3_noNA, 
                   family  = poisson,
                   control = glmerControl(optimizer="bobyqa"))
-
-
-# Fit the model
-m3 <- glm(formula_m3, family = "poisson", data = db_m3_noNA)
 
 # Check model
 performance::check_overdispersion(m3) #Overdispersed
@@ -578,12 +578,17 @@ performance::check_overdispersion(m3) #Overdispersed
 m3 <- lme4::glmer.nb(formula_m3, 
                   data    = db_m3_noNA,
                   control = glmerControl(optimizer="bobyqa"))
+
 # Check model
-performance::check_model(m3)
+performance::check_model(m1, check = c("vif"))
+performance::check_model(m1, check = c("reqq"))
 
 # Interpret the model
-parameters::model_parameters(m3)
+(fit_me <- parameters::model_parameters(m3))
 performance::r2(m3)
+
+# Save the table
+sjPlot::tab_model(m3, file = "Tables/Table S3.docx")
 
 # Plot
 (plot_model3 <- sjPlot::plot_model(m3, 
@@ -591,8 +596,8 @@ performance::r2(m3)
                                    sort.est = FALSE,  
                                    vline.color = "grey80",
                                    color = "grey5",
-                                   #axis.title = xlab_sjPlot_m3, 
-                                   #axis.labels = axis_labels_sjPlot_m3, 
+                                   axis.title = xlab_sjPlot_m3, 
+                                   axis.labels = axis_labels_sjPlot_m3, 
                                    show.values = FALSE, 
                                    value.offset = .3, 
                                    se = TRUE, 
@@ -623,7 +628,7 @@ ResponseNetwork %v% "Sensationalism"   <- db_m3_noNA[1:79,]$Sensationalism
 ResponseNetwork %v% "TotalError"       <- db_m3_noNA[1:79,]$TotalError
 ResponseNetwork %v% "Internet"         <- db_m3_noNA[1:79,]$Internet_users
 ResponseNetwork %v% "Freedom"          <- db_m3_noNA[1:79,]$TotalError
-ResponseNetwork %v% "N_Deadly_Spiders" <- db_m3_noNA[1:79,]$N_Deadly_Spiders
+#ResponseNetwork %v% "N_Deadly_Spiders" <- db_m3_noNA[1:79,]$N_Deadly_Spiders
 ResponseNetwork %v% "N_Spiders"        <- db_m3_noNA[1:79,]$N_Spiders
 
 # Model fit
@@ -631,12 +636,12 @@ ergm0 <- ergm::ergm(ResponseNetwork ~ edges, estimate = "MLE")
 ergm1 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout), estimate = "MLE")
 ergm2 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism"), estimate = "MLE")
 ergm3 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError"), estimate = "MLE")
-ergm4 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders"), estimate = "MLE")
-ergm5 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodefactor("Language"), estimate = "MLE")
-ergm6 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodefactor("Language") + nodecov("Internet"), estimate = "MLE")
-ergm7 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodefactor("Language") + nodecov("Internet") + nodecov("Freedom"), estimate = "MLE")
-ergm8 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodefactor("Language") + nodematch("Language") + nodecov("Internet"), estimate = "MLE")
-ergm9 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodecov("N_Spiders") + nodecov("Internet") + nodefactor("Language") + nodematch("Language"), estimate = "MLE")
+ergm4 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders"), estimate = "MLE")
+ergm5 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders") + nodefactor("Language"), estimate = "MLE")
+ergm6 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders") + nodefactor("Language") + nodecov("Internet"), estimate = "MLE")
+ergm7 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders") + nodefactor("Language") + nodecov("Internet") + nodecov("Freedom"), estimate = "MLE")
+ergm8 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders") + nodefactor("Language") + nodematch("Language") + nodecov("Internet"), estimate = "MLE")
+ergm9 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders") + nodecov("Internet") + nodefactor("Language") + nodematch("Language"), estimate = "MLE")
 #ergm10 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodecov("N_Spiders") + nodecov("Internet") +  nodecov("N"), estimate = "MLE")
 
 list(ergm0, ergm1, ergm2, ergm3, ergm4, ergm5, ergm6, ergm7, ergm8, ergm9) %>% map_dbl(BIC) %>% plot
@@ -682,15 +687,17 @@ EstimateDF$Variable <- c("Edges",
                          "Coordinates", 
                          "Prop. of sensationalistic news", 
                          "Prop. of news with errors",
-                         "N° of deadly spiders",
                          "N° of spiders",
                          "Internet users",
                          "Language [Arabic]",
                          "Language [Others]",
                          "Language [Russian]",
                          "Language [Spanish]",
-                         "Language [Node match]")
+                         "Node match: Language")
+# Save the table
+write.table(EstimateDF,"Tables/Table S4.docx")
 
+# Plot
 (plot_ergm1 <- EstimateDF %>% ggplot2::ggplot(aes(Variable, Estimate)) +
   geom_hline(lty = 1, size = 1.2, col = "grey80", yintercept = 0) +
   geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0, col = "grey5") +
@@ -714,8 +721,6 @@ dev.off()
 #m3 %>% sjPlot::tab_model()
 
 #Make tables... to do
-
-
 
 ### Supplementary analysis on network of news ###
 
