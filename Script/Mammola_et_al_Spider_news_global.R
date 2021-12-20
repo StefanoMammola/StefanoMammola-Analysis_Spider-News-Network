@@ -18,9 +18,11 @@
 rm(list=ls())
 
 # Loading R package -------------------------------------------------------
-library("Amelia")       
+library("Amelia")
+library("BAT")
 library("bipartite")     
 library("dplyr")  
+library("ergm")
 library("flextable")
 library("geosphere")     
 library("GGally")        
@@ -155,6 +157,15 @@ table(db_unique_news$TypeEvent)
 # Loading country-level attributes
 CountryAttributes <- read.csv(file = "Data/CountryAttributes_Demography.csv", sep = '\t', dec = ',', header = TRUE, as.is = FALSE)
 
+#Proportion of missing data?
+for (i in 2:(ncol(CountryAttributes)-1))
+  message(paste("-- Column ", 
+                colnames(CountryAttributes)[i], 
+                " contains ", 
+                round((sum(is.na(CountryAttributes[, i]) == TRUE)/nrow(CountryAttributes)) * 100, 2), 
+                "% of missing data.", sep = ""))
+
+
 # Summarizing country attributes from the Spider news database
 country_attr <- db %>% dplyr::select(Country_search,
                                      Sensationalism,
@@ -193,6 +204,7 @@ country_attr <- country_attr %>% dplyr::left_join(CountryAttributes, by = c("Cou
                   lon, 
                   lat, 
                   ISA, #number of arachnologist in the country.
+                  HDI = Human_Development_Index_.HDI._2019,
                   Education_index  = Education_Index_2019,  
                   Internet_users   = Internet_users_2018,
                   N_newspapers     = Number_newspapers_Mean1996.2005,
@@ -206,7 +218,7 @@ rm(CountryAttributes) #clean
 country_attr$Language <- ifelse(country_attr$Language %in% names(which(table(country_attr$Language)>9)), country_attr$Language , "Others")
 
 # Predict missing data
-country_attr[,9:12] <- BAT::fill(data.frame(country_attr[,9:12]))
+country_attr[,9:13] <- BAT::fill(data.frame(country_attr[,9:13]))
 
 ###############################################################
 
@@ -502,6 +514,8 @@ SpatialLayout <- country_attr[1:79,] %>% dplyr::select(lon,lat) %>% as.matrix #g
   scale_fill_manual(values = c("blue", "orange", "turquoise","purple", "grey15")) +
   theme_void() + theme(legend.position = "bottom",legend.direction = "vertical") + coord_fixed())
 
+# Figure S1 ---------------------------------------------------------------
+
 pdf(file = "Figures/Figure_S1.pdf", width = 10, height = 7)
 plot_network
 dev.off()
@@ -511,7 +525,7 @@ dev.off()
 ###################################
 
 db_m3_cat <- country_attr %>% dplyr::select(Degree, Country_search, Language) #Dependent variable + categorical
-db_m3_con <- country_attr %>% dplyr::select(N, ISA, Sensationalism, TotalError, Education_index,
+db_m3_con <- country_attr %>% dplyr::select(N, ISA, Sensationalism, TotalError, Education_index, HDI,
                                             Internet_users, N_newspapers, Press_Freedom, N_Spiders, N_Deadly_Spiders) #Continuous variables
 
 db_m3_con <- data.frame(db_m3_con)
@@ -529,19 +543,26 @@ db_m3_con$N_newspapers <- log(db_m3_con$N_newspapers+1)
 # Check collinearity
 psych::pairs.panels(db_m3_con) 
 
-#Education index and internewt users 
+#Education index, with HDI and internet users  
 #Number of newspaper with N 
 #ISA and N
+#Dealy spider and N spiders
+
 
 # Check collinearity vs categorical
-(collinearity <- country_attr %>% dplyr::select(Language, N, ISA, Sensationalism, TotalError, Education_index,
+(collinearity <- country_attr %>% dplyr::select(Language, N, ISA, Sensationalism, TotalError, Education_index, HDI,
                                Internet_users, N_newspapers, Press_Freedom, N_Spiders, 
                                N_Deadly_Spiders) %>% 
        GGally::ggpairs(aes(colour = Language, alpha = 0.4)))
 
+
+# Figure S2 ---------------------------------------------------------------
+
 pdf(file = "Figures/Figure_S2.pdf", width = 18, height =14)
 collinearity + theme_bw() 
 dev.off()
+
+# #
 
 #Check balance of levels
 db_m3_cat$Language %>% table
@@ -561,6 +582,7 @@ db_m3_noNA$Language <- as.factor(db_m3_noNA$Language)
 db_m3_noNA$Language <- factor(db_m3_noNA$Language, levels = c("Others", "English", "Arabic", "Russian", "Spanish"))
 
 # Fit the model -----------------------------------------------------------
+
 
 # Set formula
 formula_m3 <- as.formula("Degree ~ Sensationalism + TotalError + Internet_users + Press_Freedom + N_Spiders  + (1|Language)")
@@ -628,24 +650,22 @@ ResponseNetwork %v% "Sensationalism"   <- db_m3_noNA[1:79,]$Sensationalism
 ResponseNetwork %v% "TotalError"       <- db_m3_noNA[1:79,]$TotalError
 ResponseNetwork %v% "Internet"         <- db_m3_noNA[1:79,]$Internet_users
 ResponseNetwork %v% "Freedom"          <- db_m3_noNA[1:79,]$TotalError
-#ResponseNetwork %v% "N_Deadly_Spiders" <- db_m3_noNA[1:79,]$N_Deadly_Spiders
 ResponseNetwork %v% "N_Spiders"        <- db_m3_noNA[1:79,]$N_Spiders
 
 # Model fit
-ergm0 <- ergm::ergm(ResponseNetwork ~ edges, estimate = "MLE")
-ergm1 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout), estimate = "MLE")
-ergm2 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism"), estimate = "MLE")
-ergm3 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError"), estimate = "MLE")
-ergm4 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders"), estimate = "MLE")
-ergm5 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders") + nodefactor("Language"), estimate = "MLE")
-ergm6 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders") + nodefactor("Language") + nodecov("Internet"), estimate = "MLE")
-ergm7 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders") + nodefactor("Language") + nodecov("Internet") + nodecov("Freedom"), estimate = "MLE")
-ergm8 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders") + nodefactor("Language") + nodematch("Language") + nodecov("Internet"), estimate = "MLE")
-ergm9 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders") + nodecov("Internet") + nodefactor("Language") + nodematch("Language"), estimate = "MLE")
-#ergm10 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodecov("N_Spiders") + nodecov("Internet") +  nodecov("N"), estimate = "MLE")
+# ergm0 <- ergm::ergm(ResponseNetwork ~ edges, estimate = "MLE")
+# ergm1 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout), estimate = "MLE")
+# ergm2 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism"), estimate = "MLE")
+# ergm3 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError"), estimate = "MLE")
+# ergm4 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders"), estimate = "MLE")
+# ergm5 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders") + nodefactor("Language"), estimate = "MLE")
+# ergm6 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders") + nodefactor("Language") + nodecov("Internet"), estimate = "MLE")
+# ergm7 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders") + nodefactor("Language") + nodecov("Internet") + nodecov("Freedom"), estimate = "MLE")
+# ergm8 <- ergm::ergm(ResponseNetwork ~ edges + edgecov(SpatialLayout) + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders") + nodefactor("Language") + nodematch("Language") + nodecov("Internet"), estimate = "MLE")
+ergm <- ergm::ergm(ResponseNetwork ~ edges + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders") + nodecov("Internet") + nodefactor("Language") + nodematch("Language"), estimate = "MLE")
 
-list(ergm0, ergm1, ergm2, ergm3, ergm4, ergm5, ergm6, ergm7, ergm8, ergm9) %>% map_dbl(BIC) %>% plot
-ergm_BIC <- ergm9
+# list(ergm0, ergm1, ergm2, ergm3, ergm4, ergm5, ergm6, ergm7, ergm8, ergm9) %>% map_dbl(BIC) %>% plot
+# ergm_BIC <- ergm
 
 # Model validation
 
@@ -666,26 +686,30 @@ qplot(1:NSims, Sims %>% map_dbl(~.x %>% as.matrix %>% c %>% Prev)) + ylab("preva
 
 rm(BlankNetwork, NSims)#clean
 
-summary(ergm9)
+summary(ergm)
 
 # Interpret the model
 EstimateDF <- 
-  ergm_BIC %>% summary %>% extract2("coefficients") %>% 
+  ergm %>% summary %>% extract2("coefficients") %>% 
   as.data.frame %>% 
   rownames_to_column("Variable")
 
-ergm_BIC %>% 
+ergm %>% 
   confint %>% # Takes the 95% confidence intervals
   as.data.frame %>% 
   rename(Lower = 1, Upper = 2)
 
 EstimateDF %<>% # Bind them together
-  bind_cols(ergm_BIC %>% confint %>% as.data.frame %>% 
+  bind_cols(ergm %>% confint %>% as.data.frame %>% 
               rename(Lower = 1, Upper = 2))
 
-EstimateDF$Variable <- c("Edges", 
-                         "Coordinates", 
-                         "Prop. of sensationalistic news", 
+# Save the table
+write.table(EstimateDF,"Tables/Table S4.docx")
+
+#Remove edges for plot
+EstimateDF <- EstimateDF[2:nrow(EstimateDF),]
+
+EstimateDF$Variable <- c("Prop. of sensationalistic news", 
                          "Prop. of news with errors",
                          "N° of spiders",
                          "Internet users",
@@ -694,8 +718,6 @@ EstimateDF$Variable <- c("Edges",
                          "Language [Russian]",
                          "Language [Spanish]",
                          "Node match: Language")
-# Save the table
-write.table(EstimateDF,"Tables/Table S4.docx")
 
 # Plot
 (plot_ergm1 <- EstimateDF %>% ggplot2::ggplot(aes(Variable, Estimate)) +
@@ -716,11 +738,104 @@ ggpubr::ggarrange(plot_model1,plot_model2,plot_model3,plot_ergm1,
                   ncol=2, nrow=2)
 dev.off()
 
-# Export model summaries --------------------------------------------------
+# With count data ---------------------------------------------------------
 
-#m3 %>% sjPlot::tab_model()
+#Generalized exponential random graph model
+library("ergm.count")
 
-#Make tables... to do
+AdjMatrix2 <- Graph_unipartite %>% get.adjacency(attr = "weight", sparse = FALSE) 
+AdjMatrix2 %>% as.matrix %>% dim #square
+
+ResponseNetwork2 <- as.network(AdjMatrix2 %>% as.matrix, 
+                              directed = TRUE, 
+                              matrix.type = "a", 
+                              ignore.eval = FALSE, 
+                              names.eval = "weight")  # Important! )
+
+levels(db_m3_noNA$Language)[2] <- "AAA_English"
+
+#Adding node-level attributes
+ResponseNetwork2 %v% "Language"         <- as.character(db_m3_noNA[1:79,]$Language)
+ResponseNetwork2 %v% "Sensationalism"   <- db_m3_noNA[1:79,]$Sensationalism
+ResponseNetwork2 %v% "TotalError"       <- db_m3_noNA[1:79,]$TotalError
+ResponseNetwork2 %v% "Internet"         <- db_m3_noNA[1:79,]$Internet_users
+ResponseNetwork2 %v% "Freedom"          <- db_m3_noNA[1:79,]$TotalError
+ResponseNetwork2 %v% "N_Spiders"        <- db_m3_noNA[1:79,]$N_Spiders
+
+ergm::summary_formula(ResponseNetwork ~ sum, response = "weight")
+set.edge.value(ResponseNetwork,
+               "weight",
+               c(AdjMatrix))
+
+
+ergm_count0 <- ergm(ResponseNetwork2 ~ sum, response = "weight", reference = ~ Poisson)
+
+ergm_count  <- ergm(ResponseNetwork2 ~ 
+                       sum + 
+                       nodecov("Sensationalism", form = "sum") + 
+                       nodecov("TotalError", form = "sum") +
+                       nodecov("Internet", form = "sum") +
+                       nodecov("N_Spiders", form = "sum") +
+                       nodematch("Language", diff = FALSE, form = "sum"),
+                     control = control.ergm(
+                       parallel = 10, #change with your parallel
+                       MCMC.samplesize = 10000,
+                       MCMLE.maxit = 100),
+                     response = "weight", 
+                     reference = ~ Poisson)
+
+# Check model
+mcmc.diagnostics(ergm_count) #good mixing of chains
+
+# Summary stats
+summary(ergm_count)
+
+# Plotting
+EstimateDF2 <- 
+  ergm_count %>% summary %>% extract2("coefficients") %>% 
+  as.data.frame %>% 
+  rownames_to_column("Variable")
+
+
+
+ergm_count %>% 
+  confint %>% # Grabbing the 95% confidence intervals
+  as.data.frame %>% 
+  rename(Lower = 1, Upper = 2)
+
+EstimateDF2 %<>% # Bind them together
+  bind_cols(ergm_count %>% confint %>% as.data.frame %>% 
+              rename(Lower = 1, Upper = 2))
+
+# Save the table
+write.table(EstimateDF2,"Tables/Table S5.docx")
+
+#Remove edges for plot
+EstimateDF2 <- EstimateDF2[2:nrow(EstimateDF2),]
+
+EstimateDF2$Variable <- c("Prop. of sensationalistic news",
+                         "Prop. of news with errors",
+                         "Internet users",
+                         "N° of spiders",
+                         "Node match: Language")
+
+# Plot
+(plot_ergm2 <- EstimateDF2 %>% ggplot2::ggplot(aes(Variable, Estimate)) +
+    geom_hline(lty = 1, size = 1.2, col = "grey80", yintercept = 0) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0, col = "grey5") +
+    labs(y     = xlab_ergm1, 
+         title = title_ergm2) +
+    geom_point() + theme_custom() + theme(axis.title.y=element_blank()) + coord_flip())
+
+# Figure S3 ---------------------------------------------------------------
+
+pdf(file = "Figures/Figure_S3.pdf", width = 7, height = 5)
+plot_ergm2
+dev.off()
+
+# end of the analysis
+
+###############################################################
 
 ### Supplementary analysis on network of news ###
 
