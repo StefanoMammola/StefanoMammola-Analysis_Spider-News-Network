@@ -593,7 +593,7 @@ db_m3_noNA$Language <- factor(db_m3_noNA$Language, levels = c("Others", "English
 
 # Set formula
 formula_m3 <- as.formula("Degree ~ Sensationalism + TotalError + Internet_users +
-                         Press_Freedom + N_Spiders + (1|Country_search)")
+                         Press_Freedom + N_Spiders + (1|Language)")
 
 # Fit the model
 m3 <- lme4::glmer(formula_m3, 
@@ -604,13 +604,18 @@ m3 <- lme4::glmer(formula_m3,
 # Check model
 performance::check_overdispersion(m3)
 
+# Fit the model (nd)
+m3 <- lme4::glmer.nb(formula_m3, 
+                  data    = db_m3_noNA, 
+                  control = glmerControl(optimizer="bobyqa"))
+
 # Check model
 performance::check_model(m3, check = c("vif"))
 performance::check_model(m3, check = c("reqq"))
 
 # Interpret the model
 (fit_me <- parameters::model_parameters(m3))
-MuMIn::r.squaredGLMM(m3)
+performance::r2(m3)
 
 # Save the table
 sjPlot::tab_model(m3, file = "Tables/Table S3.docx")
