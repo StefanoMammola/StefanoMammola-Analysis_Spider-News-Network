@@ -248,33 +248,70 @@ pie <- unique(dplyr::left_join(x  = pie,
                                y  = data.frame(Country = db$Country_search, lon = db$lon3, lat = db$lat3), 
                                by = "Country", copy = FALSE)) 
 
+# net_map <- getMap(resolution="high") %>% 
+#         ggplot() +
+#         geom_polygon(aes(long,lat, group=group), colour="grey5", fill="grey5", size = 0.25)+
+#   ylim(-56.8,90)+ xlim(-180,195)+
+#   geom_curve(aes(x = jitter(lon3,0.0001), 
+#                  y = jitter(lat3,0.0001), 
+#                  xend = jitter(lon, 0.0001), 
+#                  yend = jitter(lat, 0.0001)),
+#              data = db, curvature = 0.24,lwd=0.4,
+#              alpha = 0.05,  color = "aquamarine")+#"#FFEA46FF")+
+#  
+#   geom_point(data = db_unique_event, 
+#                aes(x = lon, y = lat), size = 0.3,
+#                alpha = 0.9, color="aquamarine",
+#                stroke = 0.8) +
+#   ggthemes::theme_map() + theme_map_custom
+# 
+# figure_1 <- net_map + scatterpie::geom_scatterpie(data = pie, aes(x=lon, y= lat, group = Country, r = radius),
+#                                             cols = c("Non_Sensationalist","Sensationalist"), color = "white", lwd=0.05, alpha=.8) +
+#     theme(legend.position = c(0.03, 0.2),
+#           legend.text = element_text(size = 10),
+#           legend.background = element_rect(fill = "gray40", colour="transparent"))+
+#     geom_scatterpie_legend(pie$radius,
+#                            x= -165,
+#                            y= -45, n = 2,
+#                            labeller = function (x) x=c(min(pie$n), max(pie$n)))+
+#     scale_fill_manual("",labels = c("Not Sensationalist","Sensationalist"), values = c("blue","darkmagenta"))
+# 
+# ggplot2::ggsave("Figures/Figure_1.pdf", 
+#                 figure_1, 
+#                 device = cairo_pdf,
+#                 units = "cm",
+#                 width = 20,
+#                 height = 9)
+# 
+# rm(pie, pie_1, n, radius, net_map) #clean
+
 net_map <- getMap(resolution="high") %>% 
-        ggplot() +
-        geom_polygon(aes(long,lat, group=group), colour="grey5", fill="grey5", size = 0.25)+
+  ggplot() +
+  geom_polygon(aes(long,lat, group=group), colour="grey15", fill="grey15", size = 0.25)+
   ylim(-56.8,90)+ xlim(-180,195)+
   geom_curve(aes(x = jitter(lon3,0.0001), 
                  y = jitter(lat3,0.0001), 
                  xend = jitter(lon, 0.0001), 
                  yend = jitter(lat, 0.0001)),
              data = db, curvature = 0.24,lwd=0.4,
-             alpha = 0.05,  color = "aquamarine")+#"#FFEA46FF")+
- 
+             alpha = 0.05,  color = "darkcyan")+#"#FFEA46FF")+
+  
   geom_point(data = db_unique_event, 
-               aes(x = lon, y = lat), size = 0.3,
-               alpha = 0.9, color="aquamarine",
-               stroke = 0.8) +
+             aes(x = lon, y = lat), size = 0.3,
+             alpha = 0.9, color="darkcyan",
+             stroke = 0.8) +
   ggthemes::theme_map() + theme_map_custom
 
 figure_1 <- net_map + scatterpie::geom_scatterpie(data = pie, aes(x=lon, y= lat, group = Country, r = radius),
-                                            cols = c("Non_Sensationalist","Sensationalist"), color = "white", lwd=0.05, alpha=.8) +
-    theme(legend.position = c(0.03, 0.2),
-          legend.text = element_text(size = 10),
-          legend.background = element_rect(fill = "gray40", colour="transparent"))+
-    geom_scatterpie_legend(pie$radius,
-                           x= -165,
-                           y= -45, n = 2,
-                           labeller = function (x) x=c(min(pie$n), max(pie$n)))+
-    scale_fill_manual("",labels = c("Not Sensationalist","Sensationalist"), values = c("blue","darkmagenta"))
+                                                  cols = c("Non_Sensationalist","Sensationalist"), color = "white", lwd=0.05, alpha=.8) +
+  theme(legend.position = c(0.03, 0.2),
+        legend.text = element_text(size = 10),
+        legend.background = element_rect(fill = "white", colour="transparent"))+
+  geom_scatterpie_legend(pie$radius,
+                         x= -165,
+                         y= -45, n = 2,
+                         labeller = function (x) x=c(min(pie$n), max(pie$n)))+
+  scale_fill_manual("",labels = c("Not Sensationalist","Sensationalist"), values = c("blue","darkmagenta"))
 
 ggplot2::ggsave("Figures/Figure_1.pdf", 
                 figure_1, 
@@ -515,11 +552,11 @@ SpatialLayout <- country_attr[1:79,] %>% dplyr::select(lon,lat) %>% as.matrix #g
   igraph::simplify(edge.attr.comb = "sum") %>% 
   ggraph::ggraph(SpatialLayout) +
   #geom_edge_density(fill="orange", alpha=1) +
-  geom_edge_fan(aes(width=weight),color="gray60", alpha=0.05) +
+  geom_edge_fan(aes(width=weight),color="darkcyan", alpha=0.05) +
   geom_node_point(col="grey30", alpha = .8, 
                   aes(size=N,fill=Language), shape = 21) + 
   geom_node_text(aes(label = name), size=2, color="gray10", repel=TRUE) +
-  scale_fill_manual(values = c("blue", "orange", "turquoise","purple", "grey15")) +
+  scale_fill_manual(values = c("blue", "orange", "pink","purple", "grey15")) +
   theme_void() + theme(legend.position = "bottom",legend.direction = "vertical") + coord_fixed())
 
 # Figure S1 ---------------------------------------------------------------

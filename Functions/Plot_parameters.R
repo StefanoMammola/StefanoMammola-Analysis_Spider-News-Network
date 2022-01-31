@@ -99,9 +99,9 @@ theme_map_custom <- theme(
   axis.text.y=element_blank(),axis.ticks=element_blank(),
   axis.title.x=element_blank(),
   axis.title.y=element_blank(),legend.position="none",
-  panel.background=element_rect(fill ="gray40", colour="gray40"),
+  panel.background=element_rect(fill ="white", colour="white"),
   panel.border=element_blank(),
   panel.grid.major=element_blank(),
   panel.grid.minor=element_blank(),
-  plot.background=element_rect(fill ="gray40", colour="gray40")
+  plot.background=element_rect(fill ="white", colour="white")
 )
