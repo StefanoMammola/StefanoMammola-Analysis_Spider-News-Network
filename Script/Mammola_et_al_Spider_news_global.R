@@ -1,6 +1,6 @@
 ###############################################################
 
-## Mammola, S. et al. 2021
+## Mammola, S. et al. (2022) The global spread of misinformation on spiders
 
 ###############################################################
 
@@ -35,6 +35,7 @@ library("ggregplot")
 library("igraph")        
 library("lme4")
 library("magrittr")
+library("MuMIn")
 library("network")       
 library("performance")   
 library("PupillometryR") 
@@ -51,6 +52,10 @@ source("Functions/Functions_spider_news.R")
 # Loading plot parameters -------------------------------------------------
 
 source("Functions/Plot_parameters.R")
+
+# Set seed ----------------------------------------------------------------
+
+set.seed(123)
 
 ###############################################################
 
@@ -165,6 +170,8 @@ for (i in 2:(ncol(CountryAttributes)-1))
                 round((sum(is.na(CountryAttributes[, i]) == TRUE)/nrow(CountryAttributes)) * 100, 2), 
                 "% of missing data.", sep = ""))
 
+#Collinearity?
+psych::pairs.panels(CountryAttributes[,3:13])
 
 # Summarizing country attributes from the Spider news database
 country_attr <- db %>% dplyr::select(Country_search,
@@ -218,6 +225,7 @@ rm(CountryAttributes) #clean
 country_attr$Language <- ifelse(country_attr$Language %in% names(which(table(country_attr$Language)>9)), country_attr$Language , "Others")
 
 # Predict missing data
+
 country_attr[,9:13] <- BAT::fill(data.frame(country_attr[,9:13]))
 
 ###############################################################
@@ -583,9 +591,9 @@ db_m3_noNA$Language <- factor(db_m3_noNA$Language, levels = c("Others", "English
 
 # Fit the model -----------------------------------------------------------
 
-
 # Set formula
-formula_m3 <- as.formula("Degree ~ Sensationalism + TotalError + Internet_users + Press_Freedom + N_Spiders  + (1|Language)")
+formula_m3 <- as.formula("Degree ~ Sensationalism + TotalError + Internet_users +
+                         Press_Freedom + N_Spiders + (1|Country_search)")
 
 # Fit the model
 m3 <- lme4::glmer(formula_m3, 
@@ -594,20 +602,15 @@ m3 <- lme4::glmer(formula_m3,
                   control = glmerControl(optimizer="bobyqa"))
 
 # Check model
-performance::check_overdispersion(m3) #Overdispersed
-
-# Switch to negative binomial
-m3 <- lme4::glmer.nb(formula_m3, 
-                  data    = db_m3_noNA,
-                  control = glmerControl(optimizer="bobyqa"))
+performance::check_overdispersion(m3)
 
 # Check model
-performance::check_model(m1, check = c("vif"))
-performance::check_model(m1, check = c("reqq"))
+performance::check_model(m3, check = c("vif"))
+performance::check_model(m3, check = c("reqq"))
 
 # Interpret the model
 (fit_me <- parameters::model_parameters(m3))
-performance::r2(m3)
+MuMIn::r.squaredGLMM(m3)
 
 # Save the table
 sjPlot::tab_model(m3, file = "Tables/Table S3.docx")
@@ -703,8 +706,26 @@ EstimateDF %<>% # Bind them together
   bind_cols(ergm %>% confint %>% as.data.frame %>% 
               rename(Lower = 1, Upper = 2))
 
-# Save the table
-write.table(EstimateDF,"Tables/Table S4.docx")
+# Clean the table
+EstimateDF_tab <- EstimateDF
+
+CI <- paste0(round(EstimateDF_tab$Lower,2), 
+             rep(" — ", nrow(EstimateDF_tab)), 
+             round(EstimateDF_tab$Upper,2))
+
+EstimateDF_tab <- EstimateDF_tab[ , -c(4,7,8)]
+EstimateDF_tab <- data.frame(EstimateDF_tab[,1:3], CI, EstimateDF_tab[,4:5])
+rownames(EstimateDF_tab) <- NULL 
+
+for(s in c(2,3,5))
+  EstimateDF_tab[,s] <- round(EstimateDF_tab[,s],2)
+
+colnames(EstimateDF_tab)[c(3,5,6)] <- c("SE", "z", "p")
+
+EstimateDF_tab$p <- ifelse(EstimateDF_tab$p < 0.001, "<0.001", as.character(round(EstimateDF_tab$p,3)))  
+  
+#Save the table
+write.table(EstimateDF_tab,"Tables/Table S4.csv") ; rm(EstimateDF_tab, CI)
 
 #Remove edges for plot
 EstimateDF <- EstimateDF[2:nrow(EstimateDF),]
@@ -767,9 +788,6 @@ set.edge.value(ResponseNetwork,
                "weight",
                c(AdjMatrix))
 
-
-ergm_count0 <- ergm(ResponseNetwork2 ~ sum, response = "weight", reference = ~ Poisson)
-
 ergm_count  <- ergm(ResponseNetwork2 ~ 
                        sum + 
                        nodecov("Sensationalism", form = "sum") + 
@@ -796,8 +814,6 @@ EstimateDF2 <-
   as.data.frame %>% 
   rownames_to_column("Variable")
 
-
-
 ergm_count %>% 
   confint %>% # Grabbing the 95% confidence intervals
   as.data.frame %>% 
@@ -807,8 +823,26 @@ EstimateDF2 %<>% # Bind them together
   bind_cols(ergm_count %>% confint %>% as.data.frame %>% 
               rename(Lower = 1, Upper = 2))
 
-# Save the table
-write.table(EstimateDF2,"Tables/Table S5.docx")
+# Clean the table
+EstimateDF_tab2 <- EstimateDF2
+
+CI2 <- paste0(round(EstimateDF_tab2$Lower,2), 
+             rep(" — ", nrow(EstimateDF_tab2)), 
+             round(EstimateDF_tab2$Upper,2))
+
+EstimateDF_tab2 <- EstimateDF_tab2[ , -c(4,7,8)]
+EstimateDF_tab2 <- data.frame(EstimateDF_tab2[,1:3], CI2, EstimateDF_tab2[,4:5])
+rownames(EstimateDF_tab2) <- NULL 
+
+for(s in c(2,3,5))
+  EstimateDF_tab2[,s] <- round(EstimateDF_tab2[,s],2)
+
+colnames(EstimateDF_tab2)[c(3:5,6)] <- c("SE", "CI", "z", "p")
+
+EstimateDF_tab2$p <- ifelse(EstimateDF_tab2$p < 0.001, "<0.001", as.character(round(EstimateDF_tab2$p,3))) 
+
+#Save the table
+write.table(EstimateDF_tab2,"Tables/Table S5.csv") ; rm(EstimateDF_tab2, CI2)
 
 #Remove edges for plot
 EstimateDF2 <- EstimateDF2[2:nrow(EstimateDF2),]
