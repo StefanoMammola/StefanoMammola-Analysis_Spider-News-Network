@@ -65,7 +65,7 @@ title_ergm2        = "Drivers of abundance of connection\nin the network"
 
 xlab_sjPlot_m1_m2 = expression(paste("Odds ratio" %+-% "Standard Error"))
 xlab_sjPlot_m3    = expression(paste("Incidence odds ratio" %+-% "Standard Error"))
-xlab_ergm1        = expression(paste("Estimated coefficient" %+-% "Standard Error"))
+xlab_ergm1        = expression(paste("Mean effect size (95% confidence interval)"))
 
 ###########
 # Themes ##

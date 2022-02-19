@@ -44,6 +44,7 @@ library("scatterpie")
 library("sna")           
 library("tidygraph")
 library("tidyverse")   
+library("tidylog")
 
 # Loading useful functions ------------------------------------------------
 
@@ -317,7 +318,7 @@ ggplot2::ggsave("Figures/Figure_1.pdf",
                 figure_1, 
                 device = cairo_pdf,
                 units = "cm",
-                width = 20,
+                width = 25,
                 height = 9)
 
 rm(pie, pie_1, n, radius, net_map) #clean
@@ -430,17 +431,28 @@ performance::r2(m1)
 sjPlot::tab_model(m1, file = "Tables/Table S1.docx")
 
 # Plot
-(plot_model1 <- sjPlot::plot_model(m1, 
-                                   title = title_sjPlot_m1,
-                                   sort.est = FALSE,  
-                                   vline.color = "grey80",
-                                   colors = "grey5",#rev(color_p_value),
-                                   axis.title = xlab_sjPlot_m1_m2, #"Odds ratios ",
-                                   axis.labels = rev(axis_labels_sjPlot_m1), #rev cause it traspose x and y axes
-                                   show.values = FALSE, 
-                                   value.offset = .3, 
-                                   se = TRUE, 
-                                   show.p = FALSE) + ylim(-.8,1.4) + theme_custom())
+Estimates_m1 <- 
+  m1 %>% 
+  summary %>% 
+  magrittr::extract2("coefficients") %>% # extract estimates
+  as.data.frame %>% rownames_to_column("Variable") %>% 
+  dplyr::filter(!row_number() %in% 1) %>%  #remove intercept
+  dplyr::rename(SE = 3, z = 4, p = 5) #rename
+
+Estimates_m1$Variable <- axis_labels_sjPlot_m1
+
+(plot_model1 <- ggplot2::ggplot(data = Estimates_m1, aes(Variable, Estimate)) +
+    geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0) +
+    geom_errorbar(aes(ymin = Estimate-SE, ymax = Estimate+SE), width = 0, col = "grey10") +
+    
+    geom_text(aes(Variable, Estimate), 
+              label = round(Estimates_m1$Estimate,2), 
+              vjust = -1, size = 3) +
+    geom_point(size = 2, pch = 21, col = "grey10", fill = "grey20") +
+    labs(title = title_sjPlot_m1,
+         y = xlab_sjPlot_m1_m2,
+         x = NULL)+
+    theme_custom() + coord_flip())
 
 rm(R_m1) #clean
 
@@ -474,18 +486,29 @@ performance::r2(m2)
 #save the table
 sjPlot::tab_model(m2, file = "Tables/Table S2.docx")
 
-# Plot
-(plot_model2 <- sjPlot::plot_model(m2, 
-                                   title = title_sjPlot_m2,
-                                   sort.est = FALSE,  
-                                   vline.color = "grey80",
-                                   color = "grey5",
-                                   axis.title = xlab_sjPlot_m1_m2, 
-                                   axis.labels = rev(axis_labels_sjPlot_m2), 
-                                   show.values = FALSE, 
-                                   value.offset = .3, 
-                                   se = TRUE, 
-                                   show.p = FALSE) + ylim(-.8,1.4) + theme_custom())
+#Plot
+Estimates_m2 <- 
+  m2 %>% 
+  summary %>% 
+  magrittr::extract2("coefficients") %>% # extract estimates
+  as.data.frame %>% rownames_to_column("Variable") %>% 
+  dplyr::filter(!row_number() %in% 1) %>%  #remove intercept
+  dplyr::rename(SE = 3, z = 4, p = 5) #rename
+
+Estimates_m2$Variable <- axis_labels_sjPlot_m2
+
+(plot_model2 <- ggplot2::ggplot(data = Estimates_m2, aes(Variable, Estimate)) +
+    geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0) +
+    geom_errorbar(aes(ymin = Estimate-SE, ymax = Estimate+SE), width = 0, col = "grey10") +
+    
+    geom_text(aes(Variable, Estimate), 
+              label = round(Estimates_m2$Estimate,2), 
+              vjust = -1, size = 3) +
+    geom_point(size = 2, pch = 21, col = "grey10", fill = "grey20") +
+    labs(title = title_sjPlot_m2,
+         y = xlab_sjPlot_m1_m2,
+         x = NULL)+
+    theme_custom() + coord_flip())
 
 rm(R_m2) #clean
 
@@ -604,7 +627,7 @@ psych::pairs.panels(db_m3_con)
 # Figure S2 ---------------------------------------------------------------
 
 pdf(file = "Figures/Figure_S2.pdf", width = 18, height =14)
-collinearity + theme_bw() 
+psych::pairs.panels(db_m3_con) 
 dev.off()
 
 # #
@@ -658,17 +681,27 @@ performance::r2(m3)
 sjPlot::tab_model(m3, file = "Tables/Table S3.docx")
 
 # Plot
-(plot_model3 <- sjPlot::plot_model(m3, 
-                                   title = title_sjPlot_m3,
-                                   sort.est = FALSE,  
-                                   vline.color = "grey80",
-                                   color = "grey5",
-                                   axis.title = xlab_sjPlot_m3, 
-                                   axis.labels = axis_labels_sjPlot_m3, 
-                                   show.values = FALSE, 
-                                   value.offset = .3, 
-                                   se = TRUE, 
-                                   show.p = FALSE) + theme_custom())
+Estimates_m3 <- 
+  m3 %>% 
+  summary %>% 
+  magrittr::extract2("coefficients") %>% # extract estimates
+  as.data.frame %>% rownames_to_column("Variable") %>% 
+  dplyr::filter(!row_number() %in% 1) %>%  #remove intercept
+  dplyr::rename(SE = 3, z = 4, p = 5) #rename
+
+Estimates_m3$Variable <- axis_labels_sjPlot_m3
+
+(plot_model3 <- ggplot2::ggplot(data = Estimates_m3, aes(Variable, Estimate)) +
+    geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0) +
+    geom_errorbar(aes(ymin = Estimate-SE, ymax = Estimate+SE), width = 0, col = "grey10") +
+    geom_text(aes(Variable, Estimate), 
+              label = round(Estimates_m3$Estimate,2), 
+              vjust = -1, size = 3) +
+    geom_point(size = 2, pch = 21, col = "grey10", fill = "grey20") +
+    labs(title = title_sjPlot_m3,
+         y = xlab_sjPlot_m3,
+         x = NULL)+
+    theme_custom() + coord_flip())
 
 ###################################
 # Exponential Random Graph Models #
@@ -770,9 +803,9 @@ EstimateDF_tab$p <- ifelse(EstimateDF_tab$p < 0.001, "<0.001", as.character(roun
 write.table(EstimateDF_tab,"Tables/Table S4.csv") ; rm(EstimateDF_tab, CI)
 
 #Remove edges for plot
-EstimateDF <- EstimateDF[2:nrow(EstimateDF),]
+Estimate_m4 <- EstimateDF[2:nrow(EstimateDF),]
 
-EstimateDF$Variable <- c("Prop. of sensationalistic news", 
+Estimate_m4$Variable <- c("Prop. of sensationalistic news", 
                          "Prop. of news with errors",
                          "N° of spiders",
                          "Internet users",
@@ -783,16 +816,20 @@ EstimateDF$Variable <- c("Prop. of sensationalistic news",
                          "Node match: Language")
 
 # Plot
-(plot_ergm1 <- EstimateDF %>% ggplot2::ggplot(aes(Variable, Estimate)) +
-  geom_hline(lty = 1, size = 1.2, col = "grey80", yintercept = 0) +
-  geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0, col = "grey5") +
-  labs(y     = xlab_ergm1, 
-       title = title_ergm1) +
-      geom_point() + theme_custom() + theme(axis.title.y=element_blank()) + coord_flip())
+(plot_ergm1 <- Estimate_m4 %>% ggplot2::ggplot(aes(Variable, Estimate)) +
+    geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0, col = "grey10") +
+    geom_text(aes(Variable, Estimate), 
+              label = round(Estimate_m4$Estimate,2), 
+              vjust = -1, size = 3) +
+    geom_point(size = 2, pch = 21, col = "grey10", fill = "grey20") +  
+    labs(y = xlab_ergm1, 
+         title = title_ergm1) +
+    geom_point() + theme_custom() + theme(axis.title.y=element_blank()) + coord_flip())
 
 # Figure 2 ----------------------------------------------------------------
 
-pdf(file = "Figures/Figure_2.pdf", width = 14, height =10)
+pdf(file = "Figures/Figure_2.pdf", width = 16, height =12)
 ggpubr::ggarrange(plot_model1,plot_model2,plot_model3,plot_ergm1,
                   common.legend = FALSE,
                   hjust = -5,
@@ -825,7 +862,6 @@ ResponseNetwork2 %v% "Internet"         <- db_m3_noNA[1:79,]$Internet_users
 ResponseNetwork2 %v% "Freedom"          <- db_m3_noNA[1:79,]$TotalError
 ResponseNetwork2 %v% "N_Spiders"        <- db_m3_noNA[1:79,]$N_Spiders
 
-ergm::summary_formula(ResponseNetwork ~ sum, response = "weight")
 set.edge.value(ResponseNetwork,
                "weight",
                c(AdjMatrix))
@@ -887,22 +923,27 @@ EstimateDF_tab2$p <- ifelse(EstimateDF_tab2$p < 0.001, "<0.001", as.character(ro
 write.table(EstimateDF_tab2,"Tables/Table S5.csv") ; rm(EstimateDF_tab2, CI2)
 
 #Remove edges for plot
-EstimateDF2 <- EstimateDF2[2:nrow(EstimateDF2),]
+Estimate_m5 <- EstimateDF2[2:nrow(EstimateDF2),]
 
-EstimateDF2$Variable <- c("Prop. of sensationalistic news",
+Estimate_m5$Variable <- c("Prop. of sensationalistic news",
                          "Prop. of news with errors",
                          "Internet users",
                          "N° of spiders",
                          "Node match: Language")
 
 # Plot
-(plot_ergm2 <- EstimateDF2 %>% ggplot2::ggplot(aes(Variable, Estimate)) +
-    geom_hline(lty = 1, size = 1.2, col = "grey80", yintercept = 0) +
-    geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0, col = "grey5") +
+(plot_ergm2 <- Estimate_m5 %>% ggplot2::ggplot(aes(Variable, Estimate)) +
+    geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0, col = "grey10") +
+    geom_text(aes(Variable, Estimate), 
+              label = round(Estimate_m5$Estimate,2), 
+              vjust = -1, size = 3) +
+    geom_point(size = 2, pch = 21, col = "grey10", fill = "grey20") +
     labs(y     = xlab_ergm1, 
          title = title_ergm2) +
     geom_point() + theme_custom() + theme(axis.title.y=element_blank()) + coord_flip())
 
+  
 # Figure S3 ---------------------------------------------------------------
 
 pdf(file = "Figures/Figure_S3.pdf", width = 7, height = 5)
