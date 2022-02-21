@@ -318,8 +318,8 @@ ggplot2::ggsave("Figures/Figure_1.pdf",
                 figure_1, 
                 device = cairo_pdf,
                 units = "cm",
-                width = 25,
-                height = 9)
+                width = 26,
+                height = 11)
 
 rm(pie, pie_1, n, radius, net_map) #clean
 
