@@ -41,7 +41,8 @@ library("performance")
 library("PupillometryR") 
 library("rworldmap")
 library("scatterpie")
-library("sna")           
+library("sjPlot")
+library("sna")    
 library("tidygraph")
 library("tidyverse")   
 library("tidylog")
@@ -308,7 +309,7 @@ figure_1 <- net_map + scatterpie::geom_scatterpie(data = pie, aes(x=lon, y= lat,
   theme(legend.position = c(0.03, 0.2),
         legend.text = element_text(size = 10),
         legend.background = element_rect(fill = "white", colour="transparent"))+
-  geom_scatterpie_legend(pie$radius,
+  scatterpie::geom_scatterpie_legend(pie$radius,
                          x= -165,
                          y= -45, n = 2,
                          labeller = function (x) x=c(min(pie$n), max(pie$n)))+
@@ -318,8 +319,8 @@ ggplot2::ggsave("Figures/Figure_1.pdf",
                 figure_1, 
                 device = cairo_pdf,
                 units = "cm",
-                width = 26,
-                height = 11)
+                width = 36,
+                height = 15)
 
 rm(pie, pie_1, n, radius, net_map) #clean
 
