@@ -1,6 +1,6 @@
 ###############################################################
 
-## Mammola, S. et al. (2022) The global spread of misinformation on spiders
+## Mammola, S. et al. (2022) The global spread of (mis-)information on spiders. Current Biology.
 
 ###############################################################
 
@@ -227,7 +227,6 @@ rm(CountryAttributes) #clean
 country_attr$Language <- ifelse(country_attr$Language %in% names(which(table(country_attr$Language)>9)), country_attr$Language , "Others")
 
 # Predict missing data
-
 country_attr[,9:13] <- BAT::fill(data.frame(country_attr[,9:13]))
 
 ###############################################################
@@ -393,7 +392,7 @@ Estimates_m1 <-
   dplyr::filter(!row_number() %in% 1) %>%  #remove intercept
   dplyr::rename(SE = 3, z = 4, p = 5) #rename
 
-Estimates_m1$Variable <- axis_labels_sjPlot_m1
+Estimates_m1$Variable <- axis_labels_plot_model1
 
 (plot_model1 <- ggplot2::ggplot(data = Estimates_m1, aes(Variable, Estimate)) +
     geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0) +
@@ -403,12 +402,12 @@ Estimates_m1$Variable <- axis_labels_sjPlot_m1
               label = round(Estimates_m1$Estimate,2), 
               vjust = -1, size = 3) +
     geom_point(size = 2, pch = 21, col = "grey10", fill = "grey20") +
-    labs(title = title_sjPlot_m1,
-         y = xlab_sjPlot_m1_m2,
+    labs(title = title_plot_model1,
+         y = xlab_plot_model1,
          x = NULL)+
     theme_custom() + coord_flip())
 
-rm(R_m1) #clean
+rm(R_m1, formula_m1) #clean
 
 ###############################################################
 
@@ -552,7 +551,7 @@ colnames(AdjMatrix) <- rownames(AdjMatrix) <- Graph_unipartite %>% activate(node
 #Response variables
 ResponseNetwork <- AdjMatrix %>% as.matrix %>% network::network(directed = FALSE)
 
-levels(db_m2_noNA$Language)[2] <- "AAA_English"
+levels(db_m2_noNA$Language)[2] <- "AAA_English" #Setting baseline
 
 #Adding node-level attributes
 ResponseNetwork %v% "Language"         <- as.character(db_m2_noNA[1:79,]$Language)
@@ -572,7 +571,7 @@ ergm <- ergm::ergm(ResponseNetwork ~ edges + nodecov("Sensationalism") + nodecov
 BlankNetwork   <- ResponseNetwork ; BlankNetwork[] <- 0 #generate an empty network with the same dim as ResponseNetwork 
 NSims <- 1000 #N simulation
 
-Sims <- stats::simulate(ergm_BIC, nsim = NSims, basis = BlankNetwork)
+Sims <- stats::simulate(ergm, nsim = NSims, basis = BlankNetwork)
 
 ResponseNetwork %>% as.matrix %>% Prev # average probability of having an edge connecting two nodes
 
@@ -583,8 +582,6 @@ qplot(1:NSims, Sims %>% map_dbl(~.x %>% as.matrix %>% c %>% Prev)) + ylab("preva
   geom_hline(yintercept = Prev(as.matrix(ResponseNetwork)), colour = "red") + theme_custom()
 
 rm(BlankNetwork, NSims)#clean
-
-summary(ergm)
 
 # Interpret the model
 EstimateDF <- 
@@ -618,32 +615,25 @@ for(s in c(2,3,5))
 colnames(EstimateDF_tab)[c(3,5,6)] <- c("SE", "z", "p")
 
 EstimateDF_tab$p <- ifelse(EstimateDF_tab$p < 0.001, "<0.001", as.character(round(EstimateDF_tab$p,3)))  
-  
-#Save the table
-write.table(EstimateDF_tab,"Tables/Table S1b.csv") ; rm(EstimateDF_tab, CI)
 
-#Remove edges for plot
+# Summary
+EstimateDF_tab
+
+# Remove edges for plot
 Estimate_m2 <- EstimateDF[2:nrow(EstimateDF),]
 
-Estimate_m2$Variable <- c("Prop. of sensationalistic news", 
-                         "Prop. of news with errors",
-                         "N° of spiders",
-                         "Internet users",
-                         "Language [Arabic]",
-                         "Language [Others]",
-                         "Language [Russian]",
-                         "Language [Spanish]",
-                         "Node match: Language")
+Estimate_m2$Variable <- axis_labels_plot_model2
+  
 # Plot
 (plot_model2 <- Estimate_m2 %>% ggplot2::ggplot(aes(Variable, Estimate)) +
     geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0) +
     geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0, col = "grey10") +
     geom_text(aes(Variable, Estimate), 
-              label = round(Estimate_m4$Estimate,2), 
+              label = round(Estimate_m2$Estimate,2), 
               vjust = -1, size = 3) +
     geom_point(size = 2, pch = 21, col = "grey10", fill = "grey20") +  
-    labs(y = xlab_ergm1, 
-         title = title_ergm1) +
+    labs(y = xlab_model2, 
+         title = title_plot_model2) +
     geom_point() + theme_custom() + theme(axis.title.y=element_blank()) + coord_flip())
 
 # Figure 1 ----------------------------------------------------------------
@@ -659,3 +649,4 @@ ggpubr::ggarrange(figure_1a,
                   nrow=2)
 dev.off()
 
+# -- End-- #

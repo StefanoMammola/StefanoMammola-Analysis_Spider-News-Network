@@ -1,5 +1,9 @@
 ###############################################################
 
+## Mammola, S. et al. (2022) The global spread of (mis-)information on spiders. Current Biology.
+
+###############################################################
+
 ## ------------------------------------------------------------------------
 # 'Custom plot parameters for ggplot2'
 ## ------------------------------------------------------------------------
@@ -7,15 +11,10 @@
 ## Authors: Stefano Mammola
 ## Software: R (v. R 4.1.0) and R studio (v. 1.4.1103)
 
-###########
-# Colors ##
-###########
-color_event   <- c("turquoise3", "orangered", "grey10")
-
 ################
 # axis labels ##
 ################
-axis_labels_sjPlot_m1 = c("Year of publication",
+axis_labels_plot_model1 = c("Year of publication",
                           "Type [Magazine]",
                           "Type [Online only]",
                           "Circulation [Internat.]",
@@ -29,43 +28,21 @@ axis_labels_sjPlot_m1 = c("Year of publication",
                           "Expert [Arachnologist]",
                           "Expert [Others]")
 
-axis_labels_sjPlot_m2 = c("Year of publication",
-                          "Type [Magazine]",
-                          "Type [Online only]",
-                          "Circulation [Internat.]",
-                          "Circulation [National]",
-                          "Event [Bite]",
-                          "Event [Deadly Bite]",
-                          "Sensationalism [Yes]",
-                          "Expert [Doctor]",
-                          "Expert [Arachnologist]",
-                          "Expert [Others]")
-
-axis_labels_sjPlot_m3 = c("N° of spiders",
-                          "Press freedom",
+axis_labels_plot_model2 = c("Prop. of sensationalistic news", 
+                          "Prop. of news with errors",
+                          "N° of spiders",
                           "Internet users",
-                          "News with errors [Proportion]",
-                          "Sensationalistic news [Proportion]")
+                          "Language [Arabic]",
+                          "Language [Others]",
+                          "Language [Russian]",
+                          "Language [Spanish]",
+                          "Node match: Language")
 
-axis_labels_ergm1 <- c("Edges", 
-                       "nodeMatch [Language]", 
-                       "Language [English]",
-                       "Language [Others]",
-                       "Language [Russian]",
-                       "Lenguage [Spanish]",
-                       "Sensationalism",
-                       "Errors",
-                       "Number of News Articles")
+title_plot_model1    = "Drivers of sensationalism"
+title_plot_model2    = "Drivers of probability of connection\nin the network"
 
-title_sjPlot_m1    = "Drivers of sensationalism"
-title_sjPlot_m2    = "Drivers of errors [any error type]"
-title_sjPlot_m3    = "Drivers of country centrality\nin the network"
-title_ergm1        = "Drivers of probability of connection\nin the network"
-title_ergm2        = "Drivers of abundance of connection\nin the network"
-
-xlab_sjPlot_m1_m2 = expression(paste("Odds ratio" %+-% "Standard Error"))
-xlab_sjPlot_m3    = expression(paste("Incidence odds ratio" %+-% "Standard Error"))
-xlab_ergm1        = expression(paste("Mean effect size (95% confidence interval)"))
+xlab_plot_model1 = expression(paste("Odds ratio" %+-% "Standard Error"))
+xlab_model2        = expression(paste("Mean effect size (95% confidence interval)"))
 
 ###########
 # Themes ##
@@ -90,9 +67,7 @@ theme_custom <- function(){
       legend.key = element_blank(),
       legend.background = element_rect(color = "black", 
                                        fill = "transparent", 
-                                       size = 2, linetype = "blank"))
-
-}
+                                       size = 2, linetype = "blank"))}
 
 theme_map_custom <- theme( 
   axis.line=element_blank(),axis.text.x=element_blank(),
@@ -103,5 +78,4 @@ theme_map_custom <- theme(
   panel.border=element_blank(),
   panel.grid.major=element_blank(),
   panel.grid.minor=element_blank(),
-  plot.background=element_rect(fill ="white", colour="white")
-)
+  plot.background=element_rect(fill ="white", colour="white"))

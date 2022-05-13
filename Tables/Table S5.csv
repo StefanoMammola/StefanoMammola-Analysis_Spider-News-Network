@@ -1,7 +1,0 @@
-"Variable" "Estimate" "SE" "CI" "z" "p"
-"1" "sum" 0.64 0.01 "0.62 — 0.66" 59.62 "<0.001"
-"2" "nodecov.sum.Sensationalism" 0.36 0.01 "0.34 — 0.37" 64.72 "<0.001"
-"3" "nodecov.sum.TotalError" 0.01 0.01 "0 — 0.02" 1.24 "0.214"
-"4" "nodecov.sum.Internet" 0.67 0.01 "0.66 — 0.69" 101.21 "<0.001"
-"5" "nodecov.sum.N_Spiders" 0.38 0 "0.37 — 0.39" 114.18 "<0.001"
-"6" "nodematch.sum.Language" 0.45 0.01 "0.43 — 0.48" 34.28 "<0.001"
