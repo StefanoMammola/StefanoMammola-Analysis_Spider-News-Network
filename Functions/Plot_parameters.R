@@ -30,7 +30,7 @@ axis_labels_plot_model1 = c("Year of publication",
 
 axis_labels_plot_model2 = c("Prop. of sensationalistic news", 
                           "Prop. of news with errors",
-                          "N° of spiders",
+                          "N° of deadly spiders",
                           "Internet users",
                           "Language [Arabic]",
                           "Language [Others]",

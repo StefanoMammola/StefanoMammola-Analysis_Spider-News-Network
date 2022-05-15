@@ -373,6 +373,7 @@ performance::check_model(m1, check = c("reqq"))
 
 R_m1 <- residuals(m1)
 
+# Check spatial / temporal patterns
 par(mfrow = c(2,2),mar = c(2,2,2,2))
 plot(db_m$lon2, R_m1, xlab = "Longitude", ylab = "Residuals",  main = "Residuals vs Longitude")
 plot(db_m$lat2, R_m1, xlab = "Latitude",  ylab = "Residuals",  main = "Residuals vs Latitude")
@@ -559,10 +560,10 @@ ResponseNetwork %v% "Sensationalism"   <- db_m2_noNA[1:79,]$Sensationalism
 ResponseNetwork %v% "TotalError"       <- db_m2_noNA[1:79,]$TotalError
 ResponseNetwork %v% "Internet"         <- db_m2_noNA[1:79,]$Internet_users
 ResponseNetwork %v% "Freedom"          <- db_m2_noNA[1:79,]$TotalError
-ResponseNetwork %v% "N_Spiders"        <- db_m2_noNA[1:79,]$N_Spiders
+ResponseNetwork %v% "N_Deadly_Spiders" <- db_m2_noNA[1:79,]$N_Deadly_Spiders
 
 # Model fit
-ergm <- ergm::ergm(ResponseNetwork ~ edges + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Spiders") + nodecov("Internet") + nodefactor("Language") + nodematch("Language"), estimate = "MLE")
+ergm <- ergm::ergm(ResponseNetwork ~ edges + nodecov("Sensationalism") + nodecov("TotalError") + nodecov("N_Deadly_Spiders") + nodecov("Internet") + nodefactor("Language") + nodematch("Language"), estimate = "MLE")
 
 # Model validation
 
@@ -624,6 +625,11 @@ Estimate_m2 <- EstimateDF[2:nrow(EstimateDF),]
 
 Estimate_m2$Variable <- axis_labels_plot_model2
   
+#Sort
+Estimate_m2$Variable <- as.character(Estimate_m2$Variable)
+#Then turn it back into a factor with the levels in the correct order
+Estimate_m2$Variable <- factor(Estimate_m2$Variable, levels=rev(unique(Estimate_m2$Variable)))
+
 # Plot
 (plot_model2 <- Estimate_m2 %>% ggplot2::ggplot(aes(Variable, Estimate)) +
     geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0) +
