@@ -1,6 +1,6 @@
 ###############################################################
 
-## Mammola, S. et al. (2022) The global spread of (mis-)information on spiders. Current Biology.
+## Mammola, S. et al. (2022) The global spread of misinformation on spiders. Current Biology.
 
 ###############################################################
 
@@ -126,10 +126,6 @@ nrow(db_unique_event)
 
 # % of news with error
 sum(ifelse(db_unique_news$TotalError > 0 , 1 , 0),na.rm = TRUE)/nrow(db_unique_news)*100
-sum(db_unique_news$Taxonomic_error,na.rm = TRUE)/nrow(db_unique_news)*100
-sum(db_unique_news$Venom_error,na.rm = TRUE)/nrow(db_unique_news)*100
-sum(db_unique_news$Anatomy_error,na.rm = TRUE)/nrow(db_unique_news)*100
-sum(as.numeric(db_unique_news$Photo_error),na.rm = TRUE)/nrow(db_unique_news)*100
 
 # % of sensationalistic news
 sum(na.omit(db_unique_news$Sensationalism)) / nrow(db) * 100
@@ -156,10 +152,6 @@ nlevels(droplevels(db$Language))
 table(db_unique_news$TypeEvent)
 
 # Create attribute table for Network analysis -----------------------------
-
-#############################
-# At the Country level ######
-#############################
 
 # Loading country-level attributes
 CountryAttributes <- read.csv(file = "Data/CountryAttributes_Demography.csv", sep = '\t', dec = ',', header = TRUE, as.is = FALSE)
@@ -231,7 +223,7 @@ country_attr[,9:13] <- BAT::fill(data.frame(country_attr[,9:13]))
 
 ###############################################################
 
-## Figure map:
+## Figure 1A:
 
 ###############################################################
 
@@ -274,7 +266,7 @@ figure_1a <- net_map + scatterpie::geom_scatterpie(data = pie, aes(x=lon, y= lat
   scatterpie::geom_scatterpie_legend(pie$radius,
                          x= -165,
                          y= -45, n = 2,
-                         labeller = function (x) x=c(min(pie$n), max(pie$n)))+
+                         labeller = function (x) x = c(min(pie$n), max(pie$n)))+
   scale_fill_manual("",labels = c("Not Sensationalist","Sensationalist"), values = c("blue","darkmagenta"))
 
 rm(pie, pie_1, n, radius, net_map) #clean
@@ -356,7 +348,7 @@ db_m <- na.omit(db_m) #Omitting missing data
 # Final sample size
 nrow(db_m)
 
-# Fitting the model: Sensationalism ---------------------------------------
+# Fitting the model ---------------------------------------
 
 formula_m1 <- as.formula("Sensationalism ~ yr + Type_of_newspaper + Circulation + TypeEvent + Figure_species + Figure_bite +
                     TotalError.01 + Expert_doctor + Expert_arachnologist + Expert_others +
@@ -395,6 +387,12 @@ Estimates_m1 <-
 
 Estimates_m1$Variable <- axis_labels_plot_model1
 
+###############################################################
+
+## Figure 1B:
+
+###############################################################
+
 (plot_model1 <- ggplot2::ggplot(data = Estimates_m1, aes(Variable, Estimate)) +
     geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0) +
     geom_errorbar(aes(ymin = Estimate-SE, ymax = Estimate+SE), width = 0, col = "grey10") +
@@ -426,18 +424,6 @@ Graph_bipartite <- db %>%
 # Collapse it into an unipartite 
 Graph_unipartite_full <- igraph::bipartite_projection(Graph_bipartite)
 
-# Analysing country-level network properties ------------------------------
-
-# Question 1a: (Node-level)
-# Why are some countries more influential than others in generating 
-# spider-related content taken up in  other places?
-
-# Question 1b: (Edge-level)
-#Why determines the existence of specific connection (news flow) 
-# among countries?
-
-#--------------------------------------------------------------------------
-
 # Takes the unipartite project graph
 Graph_unipartite <- Graph_unipartite_full$proj1  %>% as_tbl_graph(directed = TRUE) %>% 
   activate(edges) %>% #%>% mutate(weight = 1) 
@@ -459,26 +445,23 @@ country_attr[80:81,15:19] <- 0 #give values of zero for Network properties for I
 Graph_unipartite <- Graph_unipartite %>% tidygraph::activate(nodes) %>% 
   left_join(country_attr, by = c("name" = "Country_search"))
 
-###########################
-# Visualizing the network #
-###########################
+###############################################################
 
-# Plot the network [comparing three layouts]
+## Figure S1:
+
+###############################################################
+
 SpatialLayout <- country_attr[1:79,] %>% dplyr::select(lon,lat) %>% as.matrix #geo-coordinates
 
-#SpatialLayout
 (plot_network <- Graph_unipartite %>% 
   igraph::simplify(edge.attr.comb = "sum") %>% 
   ggraph::ggraph(SpatialLayout) +
-  #geom_edge_density(fill="orange", alpha=1) +
   geom_edge_fan(aes(width=weight),color="darkcyan", alpha=0.05) +
   geom_node_point(col="grey30", alpha = .8, 
                   aes(size=N,fill=Language), shape = 21) + 
   geom_node_text(aes(label = name), size=2, color="gray10", repel=TRUE) +
   scale_fill_manual(values = c("blue", "orange", "pink","purple", "grey15")) +
   theme_void() + theme(legend.position = "bottom",legend.direction = "vertical") + coord_fixed())
-
-# Figure S1 ---------------------------------------------------------------
 
 pdf(file = "Figures/Figure_S1.pdf", width = 10, height = 7)
 plot_network
@@ -552,7 +535,7 @@ colnames(AdjMatrix) <- rownames(AdjMatrix) <- Graph_unipartite %>% activate(node
 #Response variables
 ResponseNetwork <- AdjMatrix %>% as.matrix %>% network::network(directed = FALSE)
 
-levels(db_m2_noNA$Language)[2] <- "AAA_English" #Setting baseline
+levels(db_m2_noNA$Language)[2] <- "A_English" #Setting baseline
 
 #Adding node-level attributes
 ResponseNetwork %v% "Language"         <- as.character(db_m2_noNA[1:79,]$Language)
@@ -630,7 +613,12 @@ Estimate_m2$Variable <- as.character(Estimate_m2$Variable)
 #Then turn it back into a factor with the levels in the correct order
 Estimate_m2$Variable <- factor(Estimate_m2$Variable, levels=rev(unique(Estimate_m2$Variable)))
 
-# Plot
+###############################################################
+
+## Figure 1C:
+
+###############################################################
+
 (plot_model2 <- Estimate_m2 %>% ggplot2::ggplot(aes(Variable, Estimate)) +
     geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0) +
     geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0, col = "grey10") +
@@ -642,17 +630,20 @@ Estimate_m2$Variable <- factor(Estimate_m2$Variable, levels=rev(unique(Estimate_
          title = title_plot_model2) +
     geom_point() + theme_custom() + theme(axis.title.y=element_blank()) + coord_flip())
 
-# Figure 1 ----------------------------------------------------------------
+###############################################################
+
+## Create the plate -- Figure 1:
+
+###############################################################
 
 pdf(file = "Figures/Figure_1 Current Biology.pdf", width = 14, height = 12)
-
 ggpubr::ggarrange(figure_1a, 
                   ggpubr::ggarrange(plot_model1,plot_model2,
                                     ncol = 2, nrow = 1, 
                                     align = "hv", labels = c("B","C")),
                   common.legend = FALSE,
                   labels = "A",
-                  nrow=2)
+                  nrow = 2)
 dev.off()
 
-# -- End-- #
+# -- End of the script -- #

@@ -1,6 +1,6 @@
 ###############################################################
 
-## Mammola, S. et al. (2022) The global spread of (mis-)information on spiders. Current Biology.
+## Mammola, S. et al. (2022) The global spread of misinformation on spiders. Current Biology.
 
 ###############################################################
 
@@ -15,9 +15,6 @@
 # Function to extract node traits in a graph #
 ##############################################
 
-# For a discussion:
-# https://medium.com/@615162020004/social-network-analysis-with-r-centrality-measure-86d7fa273574
-
 # Graph should be a tidygraph dataset
 
 NodeTraitGet <- function(Graph, mode = "in", dir = TRUE){
@@ -31,6 +28,9 @@ NodeTraitGet <- function(Graph, mode = "in", dir = TRUE){
     Closeness   = Graph %>% closeness(mode = mode)
   )
 }
+
+# For a discussion of the diifferent metrics:
+# https://medium.com/@615162020004/social-network-analysis-with-r-centrality-measure-86d7fa273574
 
 #########################################
 # Function to extract graph-level stats #
@@ -68,4 +68,6 @@ NetworkTraitGet <- function(Graph){
 # Other miscellaneous functions #
 #################################
 
-range01 <- function(x){(x-min(x))/(max(x)-min(x))} #Range
+range01 <- function(x){(x-min(x))/(max(x)-min(x))}
+
+# -- End of the script -- #

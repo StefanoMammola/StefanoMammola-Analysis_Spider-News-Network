@@ -1,6 +1,6 @@
 ###############################################################
 
-## Mammola, S. et al. (2022) The global spread of (mis-)information on spiders. Current Biology.
+## Mammola, S. et al. (2022) The global spread of misinformation on spiders. Current Biology.
 
 ###############################################################
 
@@ -14,7 +14,7 @@
 ################
 # axis labels ##
 ################
-axis_labels_plot_model1 = c("Year of publication",
+axis_labels_plot_model1 <- c("Year of publication",
                           "Type [Magazine]",
                           "Type [Online only]",
                           "Circulation [Internat.]",
@@ -28,7 +28,7 @@ axis_labels_plot_model1 = c("Year of publication",
                           "Expert [Arachnologist]",
                           "Expert [Others]")
 
-axis_labels_plot_model2 = c("Prop. of sensationalistic news", 
+axis_labels_plot_model2 <- c("Prop. of sensationalistic news", 
                           "Prop. of news with errors",
                           "N° of deadly spiders",
                           "Internet users",
@@ -38,11 +38,11 @@ axis_labels_plot_model2 = c("Prop. of sensationalistic news",
                           "Language [Spanish]",
                           "Node match: Language")
 
-title_plot_model1    = "Drivers of sensationalism"
-title_plot_model2    = "Drivers of probability of connection\nin the network"
+title_plot_model1 <- "Drivers of sensationalism"
+title_plot_model2 <- "Drivers of probability of connection\nin the network"
 
-xlab_plot_model1 = expression(paste("Odds ratio" %+-% "Standard Error"))
-xlab_model2        = expression(paste("Mean effect size (95% confidence interval)"))
+xlab_plot_model1 <- expression(paste("Odds ratio" %+-% "Standard Error"))
+xlab_model2      <- expression(paste("Mean effect size (95% confidence interval)"))
 
 ###########
 # Themes ##
@@ -79,3 +79,5 @@ theme_map_custom <- theme(
   panel.grid.major=element_blank(),
   panel.grid.minor=element_blank(),
   plot.background=element_rect(fill ="white", colour="white"))
+
+# -- End of the script -- #
